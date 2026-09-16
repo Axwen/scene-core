@@ -595,7 +595,7 @@ THIRD_PARTY_LICENSES/*
 
 ### 13. Host Integration and Cache Contract
 
-本仓库只定义契约，不实现 Host：
+本仓库只定义契约，不实现 Host。详细规范见 [Host 集成与缓存契约](host-cache-contract.md)：
 
 - Host 创建每请求私有且初始为空的 staging root，并把输入放在 `input/source.media`。
 - Host 在复制不可变输入快照时计算每项 `contentHash`/`byteSize`、`inputFingerprint` 和 `derivationKey`。

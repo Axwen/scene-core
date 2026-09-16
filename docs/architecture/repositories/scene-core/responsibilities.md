@@ -50,6 +50,8 @@ EngineResponse
 
 引擎不输出业务 ACL、KnowledgeSpace、Release、Evidence 可见性或回答 Citation。调用方负责把 Manifest 映射成公共 ProviderArtifact/Evidence。
 
+引擎不持有缓存数据库：持久缓存键 `(cacheScope, derivationKey)`、租约、single-flight、逐出、配额和权限域由 Host 负责；命中缓存必须创建新的 Run/provenance 并重新执行 current-result gate。完整规则见 [Host 集成与缓存契约](../../../specs/host-cache-contract.md)。
+
 Seek/上层分析模块负责 ASR、OCR、候选线索、人物目录、人工确认和搜索；分析模块先作为逻辑职责，不预建独立服务或仓库。人工出镜标注关联 `sourceVersionId` 和素材时间区间，允许不同人物区间重叠；只复用半开区间约定，不复用要求切分策略/provenance 的 `TemporalSegment`。Core 不接收人物姓名或审核状态。
 
 ## 4. 质量要求

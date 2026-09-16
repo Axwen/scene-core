@@ -93,7 +93,7 @@ Boot -> Accepted -> Running -> Completed | Failed | Cancelled | TimedOut
 
 Manifest 只描述引擎产出，不承担存储归属。每个 Artifact 使用 `relativeRef`、`byteSize`、`contentHash` 和适用时的时间字段；时间区间必须满足 `startMs >= 0`、`endMs > startMs`。单帧只记录请求时间和可选 presentation time，不伪造区间。
 
-只有 completed + exit 0 + Manifest/文件/Hash 校验通过并由 Host 原子 finalize 的完整集合可注册或缓存。staged、失败、取消、超时、崩溃或未完成产物不得发布、索引或成为缓存命中源。
+只有 completed + exit 0 + Manifest/文件/Hash 校验通过并由 Host 原子 finalize 的完整集合可注册或缓存。staged、失败、取消、超时、崩溃或未完成产物不得发布、索引或成为缓存命中源。缓存键、cacheScope 隔离与命中规则见 [Host 集成与缓存契约](../../../specs/host-cache-contract.md)。
 
 ## 8. `version` 与 `doctor`
 

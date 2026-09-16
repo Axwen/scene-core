@@ -18,6 +18,13 @@
 3. 文档统一 `engineProtocolVersion: 0.1`、`engineCacheCompatibilityId`、终态 Manifest 和不可发布的 staged/incomplete 产物，并移除 Core 实现 Tauri/AppContainer 的表述。
 4. `scene-seek` 现有按 input fingerprint 复用的逻辑被标记为迁移输入，不成为 Core 兼容约束。
 
+## 实现状态（2026-09-16）
+
+- 新增 `docs/specs/host-cache-contract.md`：职责边界表、身份与顺序（快照 → contentHash → inputFingerprint → derivationKey → StartRequest → Core 重算 → 校验/finalize → current-result gate）、缓存键 `(cacheScope, derivationKey)`、可缓存性与命中规则、并发与持久化归属、scene-seek 字幕复用迁移说明。
+- `cross-repository-contracts.md` 同步：新增 §3.3 缓存契约；§4.2 请求/事件字段改为 0.1 精确字段（engine identity 由 `version --json` 获取，不在请求里虚构）；§4.3 Manifest 改为 0.1 实际字段并明确 staged/失败不可发布；§7.1 版本固定增加 `engineCacheCompatibilityId` 与 `toolchainFingerprint`；§7.3 增加缓存负向与命中用例。
+- `responsibilities.md`、`engine-contract.md`、主 Spec §13、`implementation-plan.md` 增加缓存归属与链接；架构文档无“Core 实现 Tauri/AppContainer”表述。
+- 验收对照：`inputFingerprint` 非文件 hash 且非缓存键、`derivationKey` 排除 request/source/execution identity、cacheScope 权限隔离、命中创建新 Run、终态 Manifest 与 staged 不可发布、scene-seek 旧复用标记为迁移输入，均已写入文档。
+
 ## 依赖
 
 SC-P0-02、SC-P0-03、SC-P0-05。
