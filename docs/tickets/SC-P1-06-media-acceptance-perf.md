@@ -37,11 +37,12 @@
 增量三（2026-09-16，引擎峰值与结项）：
 
 - `scripts/bench-engine.sh`：用 `/usr/bin/time -v` 包裹单个 CLI 调用，实测引擎峰值 RSS 与墙钟（probe 34 MiB / 0.01 s；extract_preview 43 MiB / 0.05 s），已记入性能文档。
-- 大文件：20 GiB 未在本机执行（磁盘/时长），以 256 MiB 流式哈希可缩放复测，命令与门槛写入手册；需在有足够磁盘的环境复测。
+- 大文件：20 GiB（20,480 MiB）已实测——单遍 567 MiB/s（磁盘受限），峰值 RSS 152 MiB；256 MiB 缓存命中时 3.6 GiB/s。复现：`SCENE_CORE_BENCH_LARGE_MIB=20480 bash scripts/bench-media.sh`。
 
 未完成（需真实资源，不伪装为已通过）：
 
 - 真实/公开脱敏媒体样本、预览期望图与播放器点击对照；分析抽帧帧选择语义按政策属于未来独立 operation。
+- 并发/多请求下的峰值内存与磁盘配额（单请求基线已完成）。
 
 ## 依赖
 
