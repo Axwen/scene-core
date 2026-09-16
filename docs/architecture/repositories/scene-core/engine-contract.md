@@ -1,6 +1,8 @@
 # `scene-core` 引擎调用协议 Protocol 0.1
 
 > 本文是 Host-facing JSON/JSONL 契约的消费侧摘要。Rust DTO 是结构事实源，Schema 与 fixture 必须从 DTO 生成；本文不得定义第二套近似字段。
+>
+> 生成式 Schema 全量参考（字段、必填与约束）：[schema-0.1-reference.md](../../../specs/schema-0.1-reference.md)。
 
 ## 1. 传输与边界
 
