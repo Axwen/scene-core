@@ -17,6 +17,22 @@
 2. 性能报告包含设备、命令、P50/P95、峰值内存与输出体积，不承诺未测数值。
 3. 所有拒绝路径有 fixture 与错误码记录；不把规划表当已通过。
 
+## 实现状态（2026-09-16，增量一：合成媒体样本与冒烟基线）
+
+- `tests/media_acceptance.rs`（锁定工具链、env-gated）：
+  - `-display_rotation 90` 重封装样本 → `rotationDegrees=90` 且显示尺寸不变；
+  - FLAC 封面图 → `attachedPicture=true` 且**不再**成为 primary video（probe 规则收紧，避免用封面当预览帧）；
+  - `-bf 2`（mpeg4）与 `-fps_mode vfr` 样本 → probe 起点 0、时长可用，不误报回退；
+  - 预览 + 哈希性能冒烟（640x480 → 512x384、64 MiB 哈希吞吐，含防退化下限）。
+- `docs/performance/media-baseline.md`：首版设备/命令/数据（预览 25 ms/17.7 KB；debug 哈希 ≈52 MiB/s），并明确不是发布承诺。
+- workspace 共 159 tests，clippy 无 allow。
+
+未完成（增量二）：
+
+- release 构建的 probe/预览 P50/P95、峰值内存、20 GiB（或缩比）大文件与磁盘预算；
+- 真实/公开脱敏样本、golden 归一化 JSON 与预览期望图；
+- 与播放器的点击对照记录；分析抽帧帧选择语义按政策属于未来 operation。
+
 ## 依赖
 
 SC-P1-02、SC-P1-04、SC-P1-05。
