@@ -35,6 +35,15 @@ $doctorJson = $doctor.Text | ConvertFrom-Json
 if ($doctorJson.status -ne "ok") { throw "healthy doctor status is $($doctorJson.status)" }
 if ($doctorJson.checks.Count -lt 10) { throw "doctor is missing checks" }
 
+$descriptor = Get-Content (Join-Path $BundleRoot "toolchain-descriptor.json") -Raw | ConvertFrom-Json
+$buildconf = ((& (Join-Path $BundleRoot "bin/ffmpeg.exe") -hide_banner -buildconf 2>&1) -join "`n")
+foreach ($flag in $descriptor.configureFlags) {
+    if (-not $buildconf.Contains($flag)) { throw "ffmpeg buildconf is missing $flag" }
+}
+if ($buildconf -match "--enable-gpl" -or $buildconf -match "--enable-nonfree") {
+    throw "ffmpeg buildconf contains GPL or nonfree flags"
+}
+
 function New-BundleCopy([string]$Name) {
     $target = Join-Path $WorkRoot $Name
     if (Test-Path $target) { Remove-Item -Recurse -Force $target }
@@ -78,5 +87,5 @@ if ($doctor.Exit -eq 0) { throw "doctor accepted a wrong trust anchor" }
 $report = $doctor.Text | ConvertFrom-Json
 if ($report.checks[-1].code -ne "MANIFEST_DIGEST_MISMATCH") { throw "wrong trust anchor did not fail the digest check" }
 
-Write-Output "bundle smoke passed: version and doctor are healthy and fail closed on tampering"
+Write-Output "bundle smoke passed: version, doctor, buildconf flags and tamper handling are healthy"
 exit 0
