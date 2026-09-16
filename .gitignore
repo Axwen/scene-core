@@ -1,2 +1,5 @@
 /target/
 
+/packaging/bundles/windows-x86_64/bundle/
+/packaging/bundles/windows-x86_64/*.zip
+/packaging/bundles/windows-x86_64/*.sha256

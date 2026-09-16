@@ -29,7 +29,7 @@
 ```
 
 - 名称小写、去重、按字节序排序；由固定工具链的 `-formats`、`-codecs`、`-filters`、`-protocols` 归一化生成。
-- CI 对实际输出归一化后与基线逐项比较：缺失与意外新增都失败。
+- 基线随仓库提交在 `packaging/toolchains/<target>/capabilities.json`；打包脚本对生成结果与基线做逐字节比较，缺失与意外新增都失败；升级工具链时必须作为显式 PR 更新基线并附能力 diff。
 
 ## 当前候选（2026-09-16）
 

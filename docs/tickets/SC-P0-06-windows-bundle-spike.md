@@ -25,9 +25,16 @@
 - doctor 新增能力摘要校验：`capabilities.json` 的文件摘要必须等于 descriptor 记录的 `capabilitySetFingerprint`。
 - Schema 增至 14 个（新增 `toolchain-descriptor.json`）；engine 合成 bundle 测试已改用 descriptor。
 
-未完成（增量二）：
+增量二（2026-09-16，Windows 打包与冒烟）：
 
-- Windows CI 的打包脚本（组装 bundle、生成 capabilities/SBOM/package-manifest、detached checksum）、PE import/DLL closure 扫描和干净环境 `version`/`doctor` 负向测试；真实工具能力基线与 SBOM 需在 Windows 运行后入库。
+- `scripts/build-windows-bundle.ps1`：校验 lock 归档 size/SHA-256，按白名单组装 bundle（scene-core.exe、ffmpeg/ffprobe、7 个 DLL、许可证、Schema），运行固定工具生成 `capabilities.json`、`toolchain-descriptor.json`（fingerprint = 文件字节 SHA-256）、SPDX SBOM 和 `package-manifest.json`，并输出 manifest/ZIP detached checksum。
+- 能力基线已固化：`packaging/toolchains/x86_64-pc-windows-msvc/capabilities.json`（364 demuxers / 538 decoders / 228 encoders / 531 filters / 44 protocols），打包时逐字节比较，漂移即失败。
+- `scripts/bundle-smoke.ps1`：健康 bundle 的 `version`/`doctor` 通过；篡改工具、删除 DLL、新增未列出文件、错误信任锚全部 fail closed 且带稳定 code。
+- CI 新增 `windows-bundle` job（构建 → 打包 → 冒烟 → 上传 ZIP 与 checksum 工件）；bundle 产物已加入 `.gitignore`。
+
+未完成：
+
+- 原始 PE import 表扫描（当前为白名单组装 + DLL closure hash + 运行时启动验证的组合门禁）；ZIP 字节级可复现；SBOM 细化到 libav* 组件；干净 Windows 11 无依赖实测与最终许可确认由用户执行。
 
 ## 依赖
 

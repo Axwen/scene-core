@@ -69,3 +69,48 @@ jobs:
         shell: pwsh
         run: ./scripts/verify-windows-bundle.ps1
 
+  windows-bundle:
+    name: Windows bundle spike
+    runs-on: windows-latest
+    env:
+      SCENE_CORE_ENGINE_VERSION: 0.1.0-alpha.1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install pinned Rust toolchain
+        shell: pwsh
+        run: rustup toolchain install 1.85.1 --profile minimal --component rustfmt --component clippy
+
+      - name: Build release engine
+        shell: pwsh
+        env:
+          SCENE_CORE_ENGINE_COMMIT: ${{ github.sha }}
+        run: cargo +1.85.1 build --release --locked -p scene-core-engine
+
+      - name: Cache toolchain archives
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/scene-core/toolchains
+          key: toolchain-${{ hashFiles('packaging/toolchains/**/toolchain.lock.json') }}
+
+      - name: Build Windows bundle
+        shell: pwsh
+        run: |
+          ./scripts/build-windows-bundle.ps1 -Version $env:SCENE_CORE_ENGINE_VERSION -EngineCommit $env:GITHUB_SHA
+
+      - name: Smoke test bundle
+        shell: pwsh
+        run: |
+          $manifestSha = (Get-Content packaging/bundles/windows-x86_64/package-manifest.json.sha256).Split(" ")[0]
+          ./scripts/bundle-smoke.ps1 -BundleRoot packaging/bundles/windows-x86_64/bundle -TrustedManifestSha256 $manifestSha
+
+      - name: Upload bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scene-core-${{ env.SCENE_CORE_ENGINE_VERSION }}-windows-x86_64
+          path: |
+            packaging/bundles/windows-x86_64/scene-core-*.zip
+            packaging/bundles/windows-x86_64/*.sha256
+          if-no-files-found: error
+

@@ -1,7 +1,7 @@
 //! Argument parsing and stdout contract for `version --json` / `doctor --json`.
 
 use crate::doctor::{DoctorRequest, run_doctor};
-use crate::identity::{engine_identity, read_toolchain_identity};
+use crate::identity::{engine_identity, read_toolchain_identity, resolve_bundle_root};
 use crate::runner::RealCommandRunner;
 use scene_core_protocol::{CliErrorOutput, ErrorCode, Sha256Digest, VersionOutput};
 use std::path::PathBuf;
@@ -105,17 +105,10 @@ fn expect_json_flag(args: &[String]) -> Result<(), CliErrorOutput> {
 }
 
 fn executable_root() -> Result<PathBuf, CliErrorOutput> {
-    let executable = std::env::current_exe().map_err(|_| {
+    resolve_bundle_root().map_err(|reason| {
         CliErrorOutput::new(
             ErrorCode::EngineInternal,
-            "the engine executable path is unavailable",
-            "run the engine from an extracted scene-core bundle",
-        )
-    })?;
-    executable.parent().map(PathBuf::from).ok_or_else(|| {
-        CliErrorOutput::new(
-            ErrorCode::EngineInternal,
-            "the engine executable path has no parent directory",
+            reason,
             "run the engine from an extracted scene-core bundle",
         )
     })
