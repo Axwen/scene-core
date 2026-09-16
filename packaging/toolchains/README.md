@@ -12,7 +12,9 @@
 ## 验证
 
 - `scripts/verify-toolchain-lock.sh <target>`：下载 lock 中的两个归档，核对字节数与 SHA-256，并比较 DLL closure；Linux CI 每次运行（带 archive cache）。
-- SC-P0-06 在 Windows CI 进一步核对：`-buildconf` 无 `--enable-gpl`/`--enable-nonfree`、PE import closure 与 lock 一致、`version`/`doctor` 在干净环境通过。
+- Windows CI 在打包后执行：`scripts/pe-imports.py` 解析每个 PE 的 import 表，非系统导入必须都在 bundle 内、descriptor 记录的库必须存在且被实际导入、不得有未记录的 DLL；`bundle-smoke.ps1` 校验 `ffmpeg -buildconf` 包含全部记录的 configure flags 且无 `--enable-gpl`/`--enable-nonfree`。
+- engine 以 `-C target-feature=+crt-static` 构建，避免依赖 VC++ 运行库（如 `VCRUNTIME140.dll`）；`scene-core.exe` 只允许导入 Windows 系统 DLL。
+- ZIP 使用固定时间戳与 ordinal 排序生成，打包脚本会连打两次并比较 SHA-256，字节不一致即失败。
 
 ## capabilities.json 格式（SC-P0-06 生成）
 
