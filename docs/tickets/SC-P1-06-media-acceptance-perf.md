@@ -49,6 +49,10 @@
 - 非零/负起点、编辑列表、VFR/B 帧、旋转、附件图、损坏等**真实**样本（合成覆盖已有）；播放器点击对照。
 - 并发/多请求下的峰值内存与磁盘配额（单请求与 20 GiB 已完成）。
 
+增量四（2026-09-16，真实样本）：用户提供的真实 H.264/AAC MP4（96.52s，1280x720@30）实测，`probe` 与 ffprobe 逐项一致，`extract_preview` 产出 opening+midpoint（512x288，presentationTimeMs 诚实为 null）；记录于 `docs/acceptance/real-media-acceptance.md`，样本与文件名不入库。
+
+增量五（2026-09-16，bundle 内 run）：`bundle-smoke.ps1` 在解压后的 Windows bundle 内用自带 ffmpeg 生成样本，并分别执行 `probe` 与 `extract_preview`（校验 completed 与 opening 产物）；请求 JSON 由共享的 `scripts/make-run-request.py` 生成。
+
 ## 依赖
 
 SC-P1-02、SC-P1-04、SC-P1-05。

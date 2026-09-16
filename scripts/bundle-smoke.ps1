@@ -55,6 +55,26 @@ if ($buildconf -match "--enable-gpl" -or $buildconf -match "--enable-nonfree") {
     throw "ffmpeg buildconf contains GPL or nonfree flags"
 }
 
+$runRoot = Join-Path $WorkRoot "run"
+if (Test-Path $runRoot) { Remove-Item -Recurse -Force $runRoot }
+New-Item -ItemType Directory -Force -Path (Join-Path $runRoot "input") | Out-Null
+$sample = Join-Path $runRoot "input/source.media"
+& (Join-Path $BundleRoot "bin/ffmpeg.exe") -hide_banner -loglevel error -nostdin -f lavfi `
+    -i "testsrc=duration=1:size=320x240:rate=10" -c:v mjpeg -f matroska -y $sample 2>$null
+if ($LASTEXITCODE -ne 0) { throw "could not generate the in-bundle sample" }
+
+foreach ($operation in @("probe", "extract_preview")) {
+    $request = & python (Join-Path $PSScriptRoot "make-run-request.py") $operation $sample $versionJson.toolchainFingerprint
+    if ($LASTEXITCODE -ne 0) { throw "could not build the $operation request" }
+    $events = $request | & (Join-Path $BundleRoot "bin/scene-core.exe") run --staging-root $runRoot
+    if ($LASTEXITCODE -ne 0) { throw "$operation failed inside the bundle" }
+    if (-not (($events -join "`n") -match '"eventType":"completed"')) { throw "$operation did not complete" }
+}
+if (-not (Test-Path (Join-Path $runRoot "output/preview/opening.jpg"))) {
+    throw "extract_preview did not produce the opening artifact"
+}
+Write-Output "in-bundle run: probe and extract_preview completed"
+
 function New-BundleCopy([string]$Name) {
     $target = Join-Path $WorkRoot $Name
     if (Test-Path $target) { Remove-Item -Recurse -Force $target }
