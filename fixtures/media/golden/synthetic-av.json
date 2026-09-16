@@ -1,0 +1,59 @@
+{
+  "container": {
+    "bitRateBps": 895072,
+    "durationMs": 1000,
+    "fileSizeBytes": 111884,
+    "formatName": "matroska,webm",
+    "startTimeMs": 0
+  },
+  "primaryVideoStreamIndex": 0,
+  "streams": [
+    {
+      "attachedPicture": false,
+      "averageFrameRate": {
+        "den": 1,
+        "num": 10
+      },
+      "channelLayout": null,
+      "channels": null,
+      "codecName": "mjpeg",
+      "codedHeight": 48,
+      "codedWidth": 64,
+      "defaultDisposition": false,
+      "displayHeight": 48,
+      "displayWidth": 64,
+      "durationMs": null,
+      "index": 0,
+      "kind": "video",
+      "rotationDegrees": null,
+      "sampleRate": null,
+      "startTimeMs": 0,
+      "timeBase": {
+        "den": 1000,
+        "num": 1
+      }
+    },
+    {
+      "attachedPicture": false,
+      "averageFrameRate": null,
+      "channelLayout": null,
+      "channels": 1,
+      "codecName": "pcm_s16le",
+      "codedHeight": null,
+      "codedWidth": null,
+      "defaultDisposition": false,
+      "displayHeight": null,
+      "displayWidth": null,
+      "durationMs": null,
+      "index": 1,
+      "kind": "audio",
+      "rotationDegrees": null,
+      "sampleRate": 44100,
+      "startTimeMs": 0,
+      "timeBase": {
+        "den": 1000,
+        "num": 1
+      }
+    }
+  ]
+}
