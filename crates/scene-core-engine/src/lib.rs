@@ -6,6 +6,7 @@
 pub mod cli;
 pub mod doctor;
 pub mod identity;
+pub mod run;
 pub mod runner;
 
 pub use cli::run;

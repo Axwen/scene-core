@@ -8,6 +8,8 @@ fn main() {
             (json, exit_code)
         }
     };
-    println!("{json}");
+    if !json.is_empty() {
+        println!("{json}");
+    }
     std::process::exit(i32::from(exit_code));
 }

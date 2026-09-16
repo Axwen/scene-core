@@ -154,7 +154,7 @@ fn build_bundle(name: &str) -> Bundle {
             commit: engine.engine_commit.clone(),
             engine_cache_compatibility_id: engine.engine_cache_compatibility_id.clone(),
             supported_protocol_versions: vec![ProtocolVersion::current()],
-            implemented_operations: Vec::new(),
+            implemented_operations: engine.implemented_operations.clone(),
         },
         tools: vec![
             tool("ffmpeg", "bin/ffmpeg.exe"),
