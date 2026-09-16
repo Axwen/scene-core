@@ -25,11 +25,20 @@ $sha = (Get-Content package-manifest.json.sha256).Split(" ")[0]
 负向（对副本操作，原始 bundle 不动）：
 
 ```powershell
-Copy-Item -Recurse . ..\bundle-tampered
-[IO.File]::AppendAllText("..\bundle-tampered\bin\ffmpeg.exe", "x")
-.\bin\scene-core.exe doctor --json --bundle-root ..\bundle-tampered --trusted-manifest-sha256 $sha
-# 预期 exit=2、status=failed、最后一个 check code=BUNDLE_FILE_INVALID
+$bundle = (Resolve-Path .).Path
+$work   = Join-Path $env:TEMP "scene-core-tamper"
+Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue
+Copy-Item -Recurse $bundle $work
+Remove-Item -Recurse -Force (Join-Path $work "samples"), (Join-Path $work "run-sample.ps1") -ErrorAction SilentlyContinue
+[IO.File]::AppendAllText((Join-Path $work "bin\ffmpeg.exe"), "x")
+.\bin\scene-core.exe doctor --json --bundle-root $work --trusted-manifest-sha256 $sha
+# 预期 exit=2、status=failed、bundle-files code=BUNDLE_FILE_INVALID
 ```
+
+注意：副本必须在 bundle 之外，且对副本的写入要用绝对路径。.NET 的
+`[IO.File]` 会按进程当前目录（而非 PowerShell 的 `$PWD`）解析相对路径，用相对路径会写到
+`C:\Users\<file>` 之类的错误位置；bundle 目录里若混入 `samples/`、`run-sample.ps1` 等未列出文件，
+`bundle-files` 也会失败，但那验证的是“未列出文件”而非“内容被篡改”。
 
 ## B. 样本行为（`scripts/run-sample.ps1`）
 
@@ -80,8 +89,18 @@ Copy-Item -Recurse . ..\bundle-tampered
 | bframes.mkv | probe | start 0，avg 10/1 | ✅ |
 | rotation-90.mkv | probe | **rotationDegrees=90**，显示 64x48 | ✅ |
 | attached-picture.flac | probe | attachedPicture=true、**primaryVideoStreamIndex=null** | ✅ |
+| video-only.mkv | probe | completed、仅 1 条 video（mjpeg 64x48）、无音频流 | ✅ |
 | audio-only.m4a | extract_preview | failed、`MISSING_VIDEO_STREAM`、exit 3 | ✅ |
 | corrupt.mp4 | probe | failed、`CORRUPT_MEDIA`、exit 3、无产物 | ✅ |
 | baseline-cfr.mp4 | extract_preview | opening 0ms / midpoint 500ms，均 64x48（不放大），presentationTimeMs null，字节 1465/1450 | ✅ |
 
-待补：`video-only.mkv` probe；本 bundle 的 tamper 负向；播放器点击对照（C）。
+负向（对 `%TEMP%` 下的副本操作）：
+
+| 场景 | 观测 | 判定 |
+|---|---|---|
+| 副本混入未列出文件（`samples/`、`run-sample.ps1`） | failed、`BUNDLE_FILE_INVALID`（unlisted file）、exit 2 | ✅ |
+| 副本内容被追加字节（`bin\ffmpeg.exe`） | failed、`BUNDLE_FILE_INVALID`（does not match its recorded size）、exit 2，`manifest-trust-anchor` 仍 ok | ✅ |
+
+播放器对照（C）：`baseline-cfr.mp4` 0s / 500ms 画面与 `opening.jpg` / `midpoint.jpg` 一致（人工确认）。
+
+结论：Phase 1 的人工验收项全部执行，未发现偏差。
