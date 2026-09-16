@@ -1,0 +1,44 @@
+# 工具链供应链策略
+
+本目录按 target 锁定 FFmpeg/FFprobe 的不可变来源与完整性数据。bundle 只能使用 lock 中记录的精确工具链；没有任何浮动下载。
+
+## Lock 规则
+
+- `packaging/toolchains/<target>/toolchain.lock.json` 记录：不可变下载 URL、字节数、SHA-256、供应商与构建变体、上游 source tag/commit 与源码归档 hash、configure flags、许可档位和构建时间。
+- 禁止 `latest` 浮动 URL、GPL/nonfree flags 或组件、未记录的动态库、PATH 或系统安装依赖。
+- 供应商 URL 失效时，把原归档镜像到 scene-core release asset，保持同一 SHA-256，并在 lock 同时记录原 URL 与镜像 URL。
+- 升级以显式 PR 进行：更新 lock、生成能力 diff、核对许可与 CVE、保留旧 lock/bundle 到消费者升级完成；不允许原地覆盖已发布的 bundle。
+
+## 验证
+
+- `scripts/verify-toolchain-lock.sh <target>`：下载 lock 中的两个归档，核对字节数与 SHA-256，并比较 DLL closure；Linux CI 每次运行（带 archive cache）。
+- SC-P0-06 在 Windows CI 进一步核对：`-buildconf` 无 `--enable-gpl`/`--enable-nonfree`、PE import closure 与 lock 一致、`version`/`doctor` 在干净环境通过。
+
+## capabilities.json 格式（SC-P0-06 生成）
+
+```json
+{
+  "capabilitiesVersion": "1",
+  "target": "x86_64-pc-windows-msvc",
+  "demuxers": [],
+  "decoders": [],
+  "encoders": [],
+  "filters": [],
+  "protocols": []
+}
+```
+
+- 名称小写、去重、按字节序排序；由固定工具链的 `-formats`、`-codecs`、`-filters`、`-protocols` 归一化生成。
+- CI 对实际输出归一化后与基线逐项比较：缺失与意外新增都失败。
+
+## 当前候选（2026-09-16）
+
+- 来源：BtbN/FFmpeg-Builds，release tag `autobuild-2026-09-15-13-18`，变体 `win64-lgpl-shared`，`n9.0.1-30-g9258bacca5`。
+- 许可：`--enable-version3` 使该构建适用 **LGPL-3.0-or-later**（非 LGPL-2.1）；无 GPL/nonfree 组件。首次发布前必须由法律/合规确认，并随 bundle 附许可正文、copyright notices 与对应源码获取说明。
+- 能力基线与 SBOM 在 SC-P0-06 Windows 运行后生成并入库。
+
+## 许可与 CVE
+
+- LGPL 档位义务（许可证正文、源码/重链接材料、修改说明）在首次发布前确认；本文件不构成法律意见。
+- 监控 FFmpeg 及随附库的 CVE；受影响版本不得静默覆盖，以新 bundle 版本修复并记录升级说明。
+- 第三方构建不能满足来源、许可、源码可得性、能力清单或 DLL closure 任一门禁时，切换仓库控制的源码构建 CI，不降低验收标准。

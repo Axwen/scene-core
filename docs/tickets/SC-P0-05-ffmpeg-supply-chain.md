@@ -18,6 +18,21 @@
 3. 升级样例包含能力 diff、许可检查、CVE 处理、消费者兼容说明和旧版本回滚路径。
 4. Windows/Linux toolchain 分开标识，不假设二进制或 Artifact hash 跨平台相同。
 
+## 实现状态（2026-09-16）
+
+- `packaging/toolchains/x86_64-pc-windows-msvc/toolchain.lock.json` 已锁定：BtbN/FFmpeg-Builds `autobuild-2026-09-15-13-18` 变体 `win64-lgpl-shared`（`n9.0.1-30-g9258bacca5`）、不可变归档 URL + 字节数 + SHA-256、上游 `n9.0.1` tag/commit 与源码归档 hash、三个构建脚本 hash、configure flags、DLL closure（7 个）与许可档位。
+- 新增 `scripts/verify-toolchain-lock.sh`：核对归档 size/SHA-256 与 DLL closure；Linux CI 每次运行并缓存归档（`actions/cache`）。
+- 新增 `packaging/toolchains/README.md`：lock 规则、镜像策略、升级回滚、CVE、capabilities.json 格式与第三方/自建切换门禁。
+
+需要用户/法律确认：
+
+- 该候选构建使用 `--enable-version3`，实际许可档位是 **LGPL-3.0-or-later**（不是 package manifest 示例中的 LGPL-2.1-or-later）。仍属 LGPL、无 GPL/nonfree 组件，但义务不同；首次发布前需确认或改为自建 `--disable-version3` 构建。
+
+未完成：
+
+- `capabilities.json` 精确基线与 SBOM 需要运行固定工具链（Windows），归 SC-P0-06 Windows CI 生成后入库并启用逐项比较。
+- `-buildconf` 无 GPL/nonfree 核验、PE import closure 扫描与干净环境验证属 SC-P0-06。
+
 ## 依赖
 
 SC-P0-01。

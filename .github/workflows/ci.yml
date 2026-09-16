@@ -37,6 +37,15 @@ jobs:
       - name: Check schema drift preflight
         run: bash scripts/check-schema-drift.sh
 
+      - name: Cache toolchain archives
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/scene-core/toolchains
+          key: toolchain-${{ hashFiles('packaging/toolchains/**/toolchain.lock.json') }}
+
+      - name: Verify toolchain lock
+        run: bash scripts/verify-toolchain-lock.sh
+
   windows:
     name: Windows checks
     runs-on: windows-latest
