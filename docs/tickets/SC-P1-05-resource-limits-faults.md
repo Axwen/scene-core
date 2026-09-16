@@ -29,10 +29,14 @@
 - 端到端故障测试当场抓到一个真实缺陷：`implemented_operations()` 仍只报告 `probe`，导致 `extract_preview` 被 validate 拒绝（SC-P1-04 遗漏）。已修为 `[probe, extract_preview]`。
 - workspace 共 154 tests，clippy 无 allow；连续两次全量运行稳定通过。
 
-未完成：
+### Windows 栈溢出根因（2026-09-16 已修复）
 
-- **Windows 已知问题**：`SCENE_CORE_FFMPEG_DIR` 指向空目录时，Windows 子进程以 `0xC00000FD`（栈溢出）退出；Linux 正常返回 accepted→TOOL_UNAVAILABLE。该进程测试暂限定 Unix，Windows 侧需单独排查（可能是 CLI 某处深递归或运行库差异）。
-- 子进程树回收的深度检查（当前工具为单进程）、磁盘配额/大文件预算（SC-P1-06 性能基线）。
+- 现象：`SCENE_CORE_FFMPEG_DIR` 指向空目录时 Windows 子进程以 `0xC00000FD` 退出。
+- 根因：`hash_file` 用 `[0_u8; 1024 * 1024]`（1 MiB）**栈缓冲**；Windows 主线程默认栈同为 1 MiB，在 staging 校验阶段即溢出；Linux 8 MiB 未暴露。本地用 `ulimit -s 1024` 复现。
+- 修复：缓冲改为堆分配；新增 256 KiB 栈线程的回归测试；该进程测试重新在 Windows 启用。
+- 顺带修复：测试并发共享 staging 目录名导致的竞态（改用原子计数唯一命名），连续三次全量运行稳定。
+
+未完成：子进程树回收的深度检查（当前工具为单进程）、磁盘配额/大文件预算（SC-P1-06 性能基线）。
 
 ## 依赖
 

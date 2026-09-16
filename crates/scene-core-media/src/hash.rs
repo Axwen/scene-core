@@ -10,7 +10,7 @@ use std::path::Path;
 pub fn hash_file(path: &Path) -> io::Result<Sha256Digest> {
     let mut file = File::open(path)?;
     let mut hasher = Sha256::new();
-    let mut buffer = [0_u8; 1024 * 1024];
+    let mut buffer = vec![0_u8; 1024 * 1024];
     loop {
         let read = file.read(&mut buffer)?;
         if read == 0 {
@@ -39,6 +39,29 @@ mod tests {
             hash_file(&path).expect("hash"),
             Sha256Digest::from_bytes(b"scene-core")
         );
+        let _ = std::fs::remove_file(&path);
+    }
+}
+
+#[cfg(test)]
+mod stack_tests {
+    use super::*;
+
+    #[test]
+    fn hashing_fits_a_small_thread_stack() {
+        let path =
+            std::env::temp_dir().join(format!("scene-core-hash-stack-{}", std::process::id()));
+        std::fs::write(&path, vec![7_u8; 3 * 1024 * 1024]).expect("write");
+        let expected = Sha256Digest::from_bytes(&vec![7_u8; 3 * 1024 * 1024]);
+        let worker = std::thread::Builder::new()
+            .stack_size(256 * 1024)
+            .spawn(move || {
+                let digest = hash_file(&path).expect("hash");
+                (digest, path)
+            })
+            .expect("spawn");
+        let (digest, path) = worker.join().expect("join");
+        assert_eq!(digest, expected);
         let _ = std::fs::remove_file(&path);
     }
 }

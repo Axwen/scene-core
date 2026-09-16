@@ -88,6 +88,13 @@ struct FakeBackend {
     mode: Mode,
 }
 
+impl Copy for Mode {}
+impl Clone for Mode {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
 fn fake_artifact() -> Artifact {
     Artifact {
         artifact_id: Identifier::new("preview-opening").expect("id"),
@@ -169,13 +176,16 @@ fn extract_preview_reports_a_manifest() {
 }
 
 fn session_for(operation: Operation, mode: Mode) -> (Vec<EventEnvelope>, u8) {
+    static COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let request = request(operation);
     let engine = engine_identity();
     let control = RunControl::new();
     let backend = FakeBackend { mode };
     let staging_dir = std::env::temp_dir().join(format!(
-        "scene-core-session-{}-{operation:?}",
-        std::process::id()
+        "scene-core-session-{}-{}-{}",
+        std::process::id(),
+        COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+        mode as u8
     ));
     std::fs::create_dir_all(&staging_dir).expect("staging");
     let staging = StagingRoot::new(&staging_dir).expect("staging root");
@@ -647,7 +657,6 @@ fn unwritable_output_reports_resource_limit_without_artifacts() {
     let _ = std::fs::remove_dir_all(&staging);
 }
 
-#[cfg(unix)]
 #[test]
 fn missing_toolchain_still_reports_accepted_then_failed() {
     let staging =
@@ -660,7 +669,7 @@ fn missing_toolchain_still_reports_accepted_then_failed() {
     let fingerprint = digest(2).as_str().to_owned();
     let empty_dir = staging.join("empty-bin");
     std::fs::create_dir_all(&empty_dir).expect("empty bin");
-    let (exit_code, stdout, _) = run_binary(
+    let (exit_code, stdout, stderr) = run_binary(
         &["run", "--staging-root", staging.to_str().expect("utf-8")],
         Some(&serde_json::to_string(&request).expect("serialize")),
         &[
@@ -668,7 +677,7 @@ fn missing_toolchain_still_reports_accepted_then_failed() {
             ("SCENE_CORE_TOOLCHAIN_FINGERPRINT", &fingerprint),
         ],
     );
-    assert_eq!(exit_code, 2);
+    assert_eq!(exit_code, 2, "stdout: {stdout} stderr: {stderr}");
     let events: Vec<EventEnvelope> = stdout
         .lines()
         .map(|line| serde_json::from_str(line).expect("event JSON"))
