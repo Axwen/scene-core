@@ -20,6 +20,7 @@ pub enum PreviewError {
     Timeout,
     Cancelled,
     NoVideoStream,
+    ResourceLimit,
     EngineInternal(&'static str),
 }
 
@@ -31,6 +32,7 @@ impl std::fmt::Display for PreviewError {
             PreviewError::Timeout => "preview generation reached its deadline",
             PreviewError::Cancelled => "preview generation was cancelled",
             PreviewError::NoVideoStream => "the media has no decodable video stream",
+            PreviewError::ResourceLimit => "a resource limit was reached",
             PreviewError::EngineInternal(reason) => reason,
         };
         formatter.write_str(message)
@@ -90,6 +92,10 @@ pub fn generate(
         return Err(PreviewError::Timeout);
     }
     if !result.success {
+        let stderr = String::from_utf8_lossy(&result.stderr).to_lowercase();
+        if stderr.contains("no space left") || stderr.contains("permission denied") {
+            return Err(PreviewError::ResourceLimit);
+        }
         return Err(PreviewError::ToolFailed);
     }
     if !output.is_file() {
