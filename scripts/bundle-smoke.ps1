@@ -22,8 +22,19 @@ function Invoke-Cli([string[]]$Arguments) {
 $version = Invoke-Cli @("version", "--json")
 if ($version.Exit -ne 0) { throw "version --json exited $($version.Exit)" }
 $versionJson = $version.Text | ConvertFrom-Json
-if ($versionJson.implementedOperations.Count -ne 0) { throw "implementedOperations must be empty" }
 if (-not $versionJson.toolchainFingerprint) { throw "toolchainFingerprint is missing" }
+$manifestJson = Get-Content (Join-Path $BundleRoot "package-manifest.json") -Raw | ConvertFrom-Json
+$operations = @($versionJson.implementedOperations)
+foreach ($operation in $operations) {
+    if ($operation -notin @("probe", "extract_preview")) {
+        throw "unknown implemented operation: $operation"
+    }
+}
+if (($operations -join ",") -ne (@($manifestJson.engine.implementedOperations) -join ",")) {
+    throw "implementedOperations differs from the package manifest"
+}
+if ($versionJson.engineVersion -ne $manifestJson.engine.version) { throw "engine version differs from the package manifest" }
+if ($versionJson.engineCommit -ne $manifestJson.engine.commit) { throw "engine commit differs from the package manifest" }
 
 $doctor = Invoke-Cli @(
     "doctor", "--json",

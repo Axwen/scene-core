@@ -8,6 +8,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 pub const ENGINE_CACHE_COMPATIBILITY_ID: &str = "scene-core-output-v1";
+/// Operations this build implements. `extract_preview` joins in SC-P1-04.
+pub fn implemented_operations() -> Vec<Operation> {
+    vec![Operation::Probe]
+}
 pub const TOOLCHAIN_DESCRIPTOR_FILE: &str = "toolchain-descriptor.json";
 
 /// Identity baked into this build. Media operations stay empty until Phase 1.
@@ -25,7 +29,7 @@ pub fn engine_identity() -> EngineIdentity {
         engine_cache_compatibility_id: CacheCompatibilityId::new(ENGINE_CACHE_COMPATIBILITY_ID)
             .expect("cache compatibility id is well-formed"),
         supported_protocol_versions: vec![ProtocolVersion::current()],
-        implemented_operations: Vec::<Operation>::new(),
+        implemented_operations: implemented_operations(),
     }
 }
 

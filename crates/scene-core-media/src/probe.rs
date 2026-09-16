@@ -131,10 +131,20 @@ struct SideData {
 
 /// Runs the locked ffprobe and normalizes its output.
 pub fn probe(toolchain: &Toolchain, input: &Path) -> Result<NormalizedMedia, ProbeError> {
+    probe_with_cancel(toolchain, input, None)
+}
+
+/// Same as [`probe`], with an optional cancellation flag for deadline and
+/// host cancellation.
+pub fn probe_with_cancel(
+    toolchain: &Toolchain,
+    input: &Path,
+    cancellation: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+) -> Result<NormalizedMedia, ProbeError> {
     if !input.is_file() {
         return Err(ProbeError::UnsupportedInput);
     }
-    let spec = ProcessSpec::new(
+    let mut spec = ProcessSpec::new(
         toolchain.ffprobe(),
         [
             "-v".to_owned(),
@@ -147,6 +157,9 @@ pub fn probe(toolchain: &Toolchain, input: &Path) -> Result<NormalizedMedia, Pro
         ],
     )
     .with_timeout(PROBE_TIMEOUT);
+    if let Some(flag) = cancellation {
+        spec = spec.with_cancellation(flag);
+    }
     let output = match run(&spec) {
         Ok(output) => output,
         Err(ProcessError::Spawn(_)) => return Err(ProbeError::ToolUnavailable),
