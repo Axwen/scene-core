@@ -6,7 +6,7 @@ use scene_core_media::preview::generate;
 use scene_core_media::probe::probe;
 use scene_core_media::process::{ProcessSpec, run};
 use scene_core_media::toolchain::Toolchain;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 fn toolchain() -> Option<Toolchain> {
