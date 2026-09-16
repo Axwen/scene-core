@@ -1,0 +1,9 @@
+[package]
+name = "scene-core-media"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+scene-core-protocol = { path = "../scene-core-protocol" }
