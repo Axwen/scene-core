@@ -2,15 +2,16 @@
 
 use scene_core_engine::identity::engine_identity;
 use scene_core_engine::run::{
-    MediaBackend, MediaFailure, RunControl, run_session, validate_request,
+    MediaBackend, MediaFailure, PreviewOutcome, RunControl, run_session, validate_request,
 };
+use scene_core_media::staging::StagingRoot;
 use scene_core_protocol::{
-    CacheCompatibilityId, ContainerInfo, DerivationDescriptor, DescriptorVersion, ErrorCode,
-    EventEnvelope, EventType, ExecutionContext, ExecutionScope, Identifier, InputDescriptor,
-    InputRef, InputRole, InputSetDescriptor, NormalizedMedia, Operation, ProtocolError,
+    Artifact, ArtifactKind, ArtifactRole, CacheCompatibilityId, ContainerInfo,
+    DerivationDescriptor, DescriptorVersion, ErrorCode, EventEnvelope, EventType, ExecutionContext,
+    ExecutionScope, Identifier, InputDescriptor, InputRef, InputRole, InputSetDescriptor,
+    MediaType, NormalizedMedia, Operation, OperationResult, ProtocolError, RelativeRef,
     Sha256Digest, StartRequest,
 };
-use std::path::Path;
 use std::process::{Command, Stdio};
 
 fn digest(byte: u8) -> Sha256Digest {
@@ -86,8 +87,50 @@ struct FakeBackend {
     mode: Mode,
 }
 
+fn fake_artifact() -> Artifact {
+    Artifact {
+        artifact_id: Identifier::new("preview-opening").expect("id"),
+        kind: ArtifactKind::PreviewFrame,
+        role: ArtifactRole::Opening,
+        media_type: MediaType::new("image/jpeg").expect("media type"),
+        relative_ref: RelativeRef::new("output/preview/opening.jpg").expect("ref"),
+        byte_size: 1234,
+        content_hash: digest(3),
+        requested_time_ms: 0,
+        presentation_time_ms: None,
+        pixel_width: Some(64),
+        pixel_height: Some(48),
+    }
+}
+
 impl MediaBackend for FakeBackend {
-    fn probe(&self, _input: &Path, control: &RunControl) -> Result<NormalizedMedia, MediaFailure> {
+    fn extract_preview(
+        &self,
+        _staging: &StagingRoot,
+        control: &RunControl,
+    ) -> Result<PreviewOutcome, MediaFailure> {
+        match self.mode {
+            Mode::Cancel => {
+                control.request_cancel();
+                Err(MediaFailure::Cancelled)
+            }
+            Mode::Timeout => {
+                control.request_timeout();
+                Err(MediaFailure::Timeout)
+            }
+            Mode::ToolUnavailable => Err(MediaFailure::ToolUnavailable),
+            Mode::Success | Mode::Violation => Ok(PreviewOutcome {
+                media: minimal_media(),
+                artifacts: vec![fake_artifact()],
+            }),
+        }
+    }
+
+    fn probe(
+        &self,
+        _staging: &StagingRoot,
+        control: &RunControl,
+    ) -> Result<NormalizedMedia, MediaFailure> {
         match self.mode {
             Mode::Success => Ok(minimal_media()),
             Mode::Cancel => {
@@ -107,21 +150,50 @@ impl MediaBackend for FakeBackend {
     }
 }
 
-fn session(mode: Mode) -> (Vec<EventEnvelope>, u8) {
-    let request = request(Operation::Probe);
+#[test]
+fn extract_preview_reports_a_manifest() {
+    let (events, exit_code) = session_for(Operation::ExtractPreview, Mode::Success);
+    assert_eq!(exit_code, 0);
+    assert_eq!(events.len(), 3);
+    match events[2].result.as_ref().expect("result") {
+        OperationResult::ExtractPreview(preview) => {
+            assert_eq!(preview.artifact_manifest.artifacts.len(), 1);
+            assert_eq!(
+                preview.artifact_manifest.output_contract_version.as_str(),
+                "extract-preview-result/1"
+            );
+        }
+        other => panic!("unexpected result {other:?}"),
+    }
+}
+
+fn session_for(operation: Operation, mode: Mode) -> (Vec<EventEnvelope>, u8) {
+    let request = request(operation);
     let engine = engine_identity();
     let control = RunControl::new();
     let backend = FakeBackend { mode };
+    let staging_dir = std::env::temp_dir().join(format!(
+        "scene-core-session-{}-{operation:?}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&staging_dir).expect("staging");
+    let staging = StagingRoot::new(&staging_dir).expect("staging root");
     let mut events = Vec::new();
     let exit_code = run_session(
         &request,
         &engine,
+        &digest(2),
         &backend,
-        Path::new("/nonexistent"),
+        &staging,
         &control,
         &mut |event| events.push(event),
     );
+    let _ = std::fs::remove_dir_all(&staging_dir);
     (events, exit_code)
+}
+
+fn session(mode: Mode) -> (Vec<EventEnvelope>, u8) {
+    session_for(Operation::Probe, mode)
 }
 
 #[test]

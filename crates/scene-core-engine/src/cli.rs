@@ -223,6 +223,7 @@ fn run_run_command(args: &[String]) -> Result<CliOutput, CliErrorOutput> {
         });
     }
 
+    let fingerprint_for_session = toolchain_fingerprint.clone();
     let backend: Box<dyn run::MediaBackend> = match resolve_toolchain_binaries() {
         Ok(toolchain) => Box::new(ProbeBackend { toolchain }),
         Err(_) => Box::new(run::UnavailableBackend),
@@ -231,8 +232,9 @@ fn run_run_command(args: &[String]) -> Result<CliOutput, CliErrorOutput> {
         run::run_session(
             &request,
             &engine,
+            &fingerprint_for_session,
             backend.as_ref(),
-            &verified.input,
+            &verified.staging,
             &control,
             emit,
         )

@@ -18,6 +18,15 @@
 2. 请求时间与实际帧时间分别记录；无法证明实际时间时为 null，不用请求时间替代证据。
 3. Manifest 与文件 hash/size 一致；缺失/篡改由 doctor 类校验拒绝；staged 产物不发布。
 
+## 实现状态（2026-09-16）
+
+- `scene-core-media/src/preview.rs`：固定 profile（JPEG、最大边 512、不放大、保持比例、force_divisible_by=2、解码器自动应用显示旋转、移除 metadata、软件解码），`-ss` 精确定位到素材时间（origin + requested），写临时文件后 rename 原子 finalize；JPEG SOF 解析尺寸。
+- `run` 分发 `extract_preview`：先 probe（缺视频流 → `MISSING_VIDEO_STREAM`），按 duration 生成 opening（0ms）与 midpoint（`floor(durationMs/2)`，为 0 时省略）；Manifest 由请求身份 + engine + toolchain fingerprint + Artifact 组成并通过 DTO 校验；completed result 携带 media/artifactManifest/resourceUsage。
+- 事件：accepted → progress(stage `preview`, total 2) → completed；`implemented_operations()` 现为 `[probe, extract_preview]`，version/doctor/bundle smoke 随之对齐。
+- 测试：preview 合同（640x480 → 512x384；64x48 不放大）、JPEG 解析与秒格式化单元测试、run 会话中 extract_preview 的 manifest 校验；workspace 共 151 tests，clippy 无 allow。
+
+未完成：`presentationTimeMs` 证明（当前诚实为 null）、磁盘不足注入（SC-P1-05）、旋转真实样本。
+
 ## 依赖
 
 SC-P1-02、SC-P1-03。

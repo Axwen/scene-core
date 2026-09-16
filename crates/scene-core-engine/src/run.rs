@@ -2,16 +2,18 @@
 //! exit codes. Media work is injected through [`MediaBackend`].
 
 use scene_core_media::hash::hash_file;
+use scene_core_media::preview::{self, PreviewError};
 use scene_core_media::probe::{ProbeError, probe_with_cancel};
 use scene_core_media::staging::StagingRoot;
 use scene_core_media::toolchain::Toolchain;
 use scene_core_protocol::{
-    DerivationIdentity, EngineIdentity, ErrorCode, EventEnvelope, EventMessageType, EventType,
-    ExecutionContext, Identifier, NormalizedMedia, Operation, OperationResult, ProbeResult,
-    ProtocolError, ProtocolVersion, ResourceUsage, Sha256Digest, StageName, StagedSourceFacts,
+    Artifact, ArtifactKind, ArtifactManifest, ArtifactRole, DerivationIdentity, EngineIdentity,
+    ErrorCode, EventEnvelope, EventMessageType, EventType, ExecutionContext, ExtractPreviewResult,
+    Identifier, MediaType, NormalizedMedia, Operation, OperationResult, ProbeResult, ProtocolError,
+    ProtocolVersion, RelativeRef, ResourceUsage, Sha256Digest, StageName, StagedSourceFacts,
     StartRequest, UtcTimestamp, verify_staged_source,
 };
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -91,9 +93,25 @@ impl MediaFailure {
     }
 }
 
+/// Result of one preview extraction.
+pub struct PreviewOutcome {
+    pub media: NormalizedMedia,
+    pub artifacts: Vec<Artifact>,
+}
+
 /// Media operations used by the state machine. Tests inject fake backends.
 pub trait MediaBackend {
-    fn probe(&self, input: &Path, control: &RunControl) -> Result<NormalizedMedia, MediaFailure>;
+    fn probe(
+        &self,
+        staging: &StagingRoot,
+        control: &RunControl,
+    ) -> Result<NormalizedMedia, MediaFailure>;
+
+    fn extract_preview(
+        &self,
+        staging: &StagingRoot,
+        control: &RunControl,
+    ) -> Result<PreviewOutcome, MediaFailure>;
 }
 
 /// Backend used when the fixed toolchain is unavailable; the session still
@@ -101,7 +119,19 @@ pub trait MediaBackend {
 pub struct UnavailableBackend;
 
 impl MediaBackend for UnavailableBackend {
-    fn probe(&self, _input: &Path, _control: &RunControl) -> Result<NormalizedMedia, MediaFailure> {
+    fn probe(
+        &self,
+        _staging: &StagingRoot,
+        _control: &RunControl,
+    ) -> Result<NormalizedMedia, MediaFailure> {
+        Err(MediaFailure::ToolUnavailable)
+    }
+
+    fn extract_preview(
+        &self,
+        _staging: &StagingRoot,
+        _control: &RunControl,
+    ) -> Result<PreviewOutcome, MediaFailure> {
         Err(MediaFailure::ToolUnavailable)
     }
 }
@@ -112,9 +142,107 @@ pub struct ProbeBackend {
 }
 
 impl MediaBackend for ProbeBackend {
-    fn probe(&self, input: &Path, control: &RunControl) -> Result<NormalizedMedia, MediaFailure> {
-        probe_with_cancel(&self.toolchain, input, Some(control.process_flag()))
-            .map_err(|error| classify_probe_error(error, control))
+    fn probe(
+        &self,
+        staging: &StagingRoot,
+        control: &RunControl,
+    ) -> Result<NormalizedMedia, MediaFailure> {
+        probe_with_cancel(
+            &self.toolchain,
+            &staging.input(),
+            Some(control.process_flag()),
+        )
+        .map(|outcome| outcome.media)
+        .map_err(|error| classify_probe_error(error, control))
+    }
+
+    fn extract_preview(
+        &self,
+        staging: &StagingRoot,
+        control: &RunControl,
+    ) -> Result<PreviewOutcome, MediaFailure> {
+        let input = staging.input();
+        let probed = probe_with_cancel(&self.toolchain, &input, Some(control.process_flag()))
+            .map_err(|error| classify_probe_error(error, control))?;
+        if probed.media.primary_video_stream_index.is_none() {
+            return Err(MediaFailure::MissingVideoStream);
+        }
+        let mut requests: Vec<(u64, ArtifactRole, &str, &str)> = vec![(
+            0,
+            ArtifactRole::Opening,
+            "preview-opening",
+            "output/preview/opening.jpg",
+        )];
+        if let Some(duration) = probed.media.container.duration_ms {
+            let midpoint = duration / 2;
+            if midpoint > 0 {
+                requests.push((
+                    midpoint,
+                    ArtifactRole::Midpoint,
+                    "preview-midpoint",
+                    "output/preview/midpoint.jpg",
+                ));
+            }
+        }
+        let mut artifacts = Vec::new();
+        for (requested_time_ms, role, artifact_id, relative) in requests {
+            let reference = RelativeRef::new(relative).map_err(|_| MediaFailure::Internal)?;
+            let path = staging
+                .output(&reference)
+                .map_err(|_| MediaFailure::Internal)?;
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).map_err(|_| MediaFailure::Internal)?;
+            }
+            let temporary = path.with_extension("tmp");
+            preview::generate(
+                &self.toolchain,
+                &input,
+                probed.origin_ms,
+                requested_time_ms,
+                &temporary,
+                Some(control.process_flag()),
+            )
+            .map_err(|error| classify_preview_error(error, control))?;
+            std::fs::rename(&temporary, &path).map_err(|_| MediaFailure::Internal)?;
+            let bytes = std::fs::read(&path).map_err(|_| MediaFailure::Internal)?;
+            let (width, height) = preview::jpeg_dimensions(&bytes).ok_or(MediaFailure::Internal)?;
+            let byte_size = u64::try_from(bytes.len()).map_err(|_| MediaFailure::Internal)?;
+            let content_hash = hash_file(&path).map_err(|_| MediaFailure::Internal)?;
+            artifacts.push(Artifact {
+                artifact_id: Identifier::new(artifact_id).map_err(|_| MediaFailure::Internal)?,
+                kind: ArtifactKind::PreviewFrame,
+                role,
+                media_type: MediaType::new("image/jpeg").map_err(|_| MediaFailure::Internal)?,
+                relative_ref: reference,
+                byte_size,
+                content_hash,
+                requested_time_ms,
+                presentation_time_ms: None,
+                pixel_width: Some(width),
+                pixel_height: Some(height),
+            });
+        }
+        Ok(PreviewOutcome {
+            media: probed.media,
+            artifacts,
+        })
+    }
+}
+
+fn classify_preview_error(error: PreviewError, control: &RunControl) -> MediaFailure {
+    match error {
+        PreviewError::ToolUnavailable => MediaFailure::ToolUnavailable,
+        PreviewError::ToolFailed => MediaFailure::ToolFailed,
+        PreviewError::Timeout => MediaFailure::Timeout,
+        PreviewError::Cancelled => {
+            if control.is_timed_out() {
+                MediaFailure::Timeout
+            } else {
+                MediaFailure::Cancelled
+            }
+        }
+        PreviewError::NoVideoStream => MediaFailure::MissingVideoStream,
+        PreviewError::EngineInternal(_) => MediaFailure::Internal,
     }
 }
 
@@ -162,7 +290,7 @@ impl Echo {
 
 #[derive(Debug)]
 pub struct VerifiedInput {
-    pub input: PathBuf,
+    pub staging: StagingRoot,
 }
 
 /// Validates the request, its derivation key, the staging layout and the
@@ -178,14 +306,14 @@ pub fn validate_request(
         engine_cache_compatibility_id: engine_identity.engine_cache_compatibility_id.clone(),
         toolchain_fingerprint: toolchain_fingerprint.clone(),
     })?;
-    if request.operation != Operation::Probe {
+    if !crate::identity::implemented_operations().contains(&request.operation) {
         return Err(Box::new(
             ProtocolError::new(
                 ErrorCode::OperationUnavailable,
                 "the requested operation is not implemented by this build",
             )
             .with_stage("validation")
-            .with_next_step("use 'probe' or a newer engine build."),
+            .with_next_step("use a supported operation or a newer engine build."),
         ));
     }
     let staging = StagingRoot::new(staging_root).map_err(|_| {
@@ -217,7 +345,7 @@ pub fn validate_request(
         })?,
     };
     verify_staged_source(declared, Some(&facts))?;
-    Ok(VerifiedInput { input })
+    Ok(VerifiedInput { staging })
 }
 
 /// Runs the state machine and emits events in order. Returns the process exit
@@ -226,8 +354,9 @@ pub fn validate_request(
 pub fn run_session(
     request: &StartRequest,
     engine: &EngineIdentity,
+    toolchain_fingerprint: &Sha256Digest,
     backend: &dyn MediaBackend,
-    input: &Path,
+    staging: &StagingRoot,
     control: &RunControl,
     emit: &mut dyn FnMut(EventEnvelope),
 ) -> u8 {
@@ -261,18 +390,64 @@ pub fn run_session(
     }
 
     let started = Instant::now();
+    let (stage, total) = match request.operation {
+        Operation::Probe => ("probe", 1),
+        Operation::ExtractPreview => ("preview", 2),
+    };
     emit(event(
         &echo,
         engine,
         2,
         EventType::Progress,
-        Some(StageName::new("probe").expect("stage")),
+        Some(StageName::new(stage).expect("stage")),
         Some(0),
-        Some(1),
+        Some(total),
         None,
     ));
 
-    let outcome = backend.probe(input, control);
+    let outcome = match request.operation {
+        Operation::Probe => backend.probe(staging, control).map(|media| {
+            OperationResult::Probe(ProbeResult {
+                media,
+                resource_usage: ResourceUsage {
+                    wall_time_ms: 0,
+                    cpu_time_ms: None,
+                    peak_memory_bytes: None,
+                },
+            })
+        }),
+        Operation::ExtractPreview => {
+            backend
+                .extract_preview(staging, control)
+                .and_then(|outcome| {
+                    let manifest = ArtifactManifest {
+                        manifest_version: ProtocolVersion::current(),
+                        request_id: echo.request_id.clone(),
+                        source_version_id: echo.source_version_id.clone(),
+                        input_fingerprint: echo.input_fingerprint.clone(),
+                        derivation_key: echo.derivation_key.clone(),
+                        operation: Operation::ExtractPreview,
+                        operation_config_hash: request.operation_config_hash.clone(),
+                        output_contract_version: request.output_contract_version.clone(),
+                        engine: engine.clone(),
+                        toolchain_fingerprint: toolchain_fingerprint.clone(),
+                        artifacts: outcome.artifacts,
+                    };
+                    manifest.validate().map_err(|_| MediaFailure::Internal)?;
+                    Ok(OperationResult::ExtractPreview(Box::new(
+                        ExtractPreviewResult {
+                            media: outcome.media,
+                            artifact_manifest: manifest,
+                            resource_usage: ResourceUsage {
+                                wall_time_ms: 0,
+                                cpu_time_ms: None,
+                                peak_memory_bytes: None,
+                            },
+                        },
+                    )))
+                })
+        }
+    };
     let wall_time_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
 
     if let Some(violation) = control.violation() {
@@ -283,7 +458,7 @@ pub fn run_session(
     }
 
     match outcome {
-        Ok(media) => {
+        Ok(mut result) => {
             if control.is_cancelled() {
                 return terminal_failure(
                     &echo,
@@ -294,14 +469,12 @@ pub fn run_session(
                     emit,
                 );
             }
-            let result = OperationResult::Probe(ProbeResult {
-                media,
-                resource_usage: ResourceUsage {
-                    wall_time_ms,
-                    cpu_time_ms: None,
-                    peak_memory_bytes: None,
-                },
-            });
+            match &mut result {
+                OperationResult::Probe(probe) => probe.resource_usage.wall_time_ms = wall_time_ms,
+                OperationResult::ExtractPreview(preview) => {
+                    preview.resource_usage.wall_time_ms = wall_time_ms
+                }
+            }
             emit(event(
                 &echo,
                 engine,
