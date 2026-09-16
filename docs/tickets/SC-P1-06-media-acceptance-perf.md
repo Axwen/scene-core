@@ -34,10 +34,14 @@
 - 预览 golden：`fixtures/media/golden/preview-opening.sha256`，`media_acceptance` 常态断言生成字节与 golden 一致（`UPDATE_MEDIA_GOLDEN=1` 重生成）。
 - 哈希吞吐常态门槛放宽为 >2 MiB/s（仅防灾难性退化），实测值打印留档。
 
-未完成：
+增量三（2026-09-16，引擎峰值与结项）：
 
-- 20 GiB（缩比）大文件 P95、独立引擎峰值内存与磁盘预算；
-- 真实/公开脱敏样本、玩家器点击对照记录；分析抽帧帧选择语义按政策属于未来独立 operation。
+- `scripts/bench-engine.sh`：用 `/usr/bin/time -v` 包裹单个 CLI 调用，实测引擎峰值 RSS 与墙钟（probe 34 MiB / 0.01 s；extract_preview 43 MiB / 0.05 s），已记入性能文档。
+- 大文件：20 GiB 未在本机执行（磁盘/时长），以 256 MiB 流式哈希可缩放复测，命令与门槛写入手册；需在有足够磁盘的环境复测。
+
+未完成（需真实资源，不伪装为已通过）：
+
+- 真实/公开脱敏媒体样本、预览期望图与播放器点击对照；分析抽帧帧选择语义按政策属于未来独立 operation。
 
 ## 依赖
 

@@ -1,6 +1,6 @@
 # `scene-core` 落地计划
 
-> 状态：2026-09-16；Phase 0A 完成（协议 DTO/解析/身份/时间转换、14 个生成式 Schema、73 个 fixture、`version`/`doctor`）；Phase 0B 完成（供应链 lock 与校验、Windows bundle 打包/PE 扫描/确定性 ZIP/冒烟、干净 Windows 实测）；媒体运行时（Phase 1）尚未实现，Phase 1 tickets 待创建。剩余门禁：对外分发前的许可复审与聚焦 Eng Review。工程骨架的历史本地检查通过不代表跨平台验收完成。新增媒体扩展方向已获用户确认，详见 [增量工程审查](media-extension-review.md)。
+> 状态：2026-09-16；Phase 0A/0B 完成；Phase 1 六个 ticket 实现完成（media crate、FFprobe 归一化、run 状态机、诊断预览与 Manifest、故障注入、验收与性能基线），`implementedOperations` 为 `[probe, extract_preview]`。剩余门禁：真实媒体/播放器对照、20 GiB 基线、对外分发前的许可复审与聚焦 Eng Review。工程骨架的历史本地检查通过不代表跨平台验收完成。新增媒体扩展方向已获用户确认，详见 [增量工程审查](media-extension-review.md)。
 
 ## 结论
 
