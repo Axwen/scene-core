@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 pub const MAX_INPUT_BYTE_SIZE: u64 = 21_474_836_480;
 
 /// One staged logical input.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct InputDescriptor {
     pub role: InputRole,
@@ -37,7 +37,7 @@ impl InputDescriptor {
 }
 
 /// Versioned logical input set. `0.1` allows exactly one `source_media`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct InputSetDescriptor {
     pub input_set_version: DescriptorVersion,

@@ -7,7 +7,19 @@ use crate::values::{CacheCompatibilityId, Identifier, PolicyRef, Sha256Digest};
 use serde::{Deserialize, Serialize};
 
 /// Segment kinds frozen by Protocol 0.1.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    schemars::JsonSchema,
+)]
 #[serde(rename_all = "camelCase")]
 pub enum TemporalSegmentKind {
     Shot,
@@ -23,7 +35,7 @@ impl TemporalSegmentKind {
 
 /// Half-open `[startMs, endMs)` candidate interval. Public times are
 /// non-negative; parents must cover their children.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct TemporalSegment {
     pub segment_id: Identifier,
@@ -56,7 +68,7 @@ impl TemporalSegment {
 }
 
 /// Required reproducibility evidence for a segmentation policy.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct SegmentProvenance {
     pub derivation_key: Sha256Digest,

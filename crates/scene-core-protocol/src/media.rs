@@ -9,7 +9,7 @@ use crate::error::{ValidationError, validate_safe_text};
 use crate::time::Rational;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct NormalizedMedia {
     pub container: ContainerInfo,
@@ -49,11 +49,12 @@ impl NormalizedMedia {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ContainerInfo {
     pub format_name: String,
     pub duration_ms: Option<u64>,
+    #[schemars(extend("maximum" = 0))]
     pub start_time_ms: Option<u64>,
     pub bit_rate_bps: Option<u64>,
     pub file_size_bytes: u64,
@@ -75,7 +76,7 @@ impl ContainerInfo {
 }
 
 /// Stream kinds recognized by the normalized media DTO.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum StreamKind {
     Video,
@@ -85,7 +86,7 @@ pub enum StreamKind {
     Attachment,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct MediaStream {
     pub index: u32,

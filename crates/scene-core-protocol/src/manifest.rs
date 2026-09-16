@@ -11,21 +11,21 @@ use crate::values::{
 use serde::{Deserialize, Serialize};
 
 /// Artifact kinds frozen by Protocol 0.1.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum ArtifactKind {
     PreviewFrame,
 }
 
 /// Fixed diagnostic preview roles.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ArtifactRole {
     Opening,
     Midpoint,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Artifact {
     pub artifact_id: Identifier,
@@ -61,7 +61,7 @@ impl Artifact {
 
 /// Manifest of one immutable Artifact set. Contains no timestamp or resource
 /// statistics; `probe` never produces one.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ArtifactManifest {
     pub manifest_version: ProtocolVersion,

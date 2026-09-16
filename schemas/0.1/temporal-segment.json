@@ -1,0 +1,104 @@
+{
+  "$defs": {
+    "CacheCompatibilityId": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "type": "string"
+    },
+    "Identifier": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "type": "string"
+    },
+    "PolicyRef": {
+      "maxLength": 200,
+      "pattern": "^[^@]+@[A-Za-z0-9._-]+$",
+      "type": "string"
+    },
+    "SegmentProvenance": {
+      "additionalProperties": false,
+      "description": "Required reproducibility evidence for a segmentation policy.",
+      "properties": {
+        "derivationKey": {
+          "$ref": "#/$defs/Sha256Digest"
+        },
+        "engineCacheCompatibilityId": {
+          "$ref": "#/$defs/CacheCompatibilityId"
+        },
+        "toolchainFingerprint": {
+          "$ref": "#/$defs/Sha256Digest"
+        }
+      },
+      "required": [
+        "derivationKey",
+        "engineCacheCompatibilityId",
+        "toolchainFingerprint"
+      ],
+      "type": "object"
+    },
+    "Sha256Digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "TemporalSegmentKind": {
+      "description": "Segment kinds frozen by Protocol 0.1.",
+      "enum": [
+        "shot",
+        "sceneCandidate"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Half-open `[startMs, endMs)` candidate interval. Public times are\nnon-negative; parents must cover their children.",
+  "properties": {
+    "endMs": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "kind": {
+      "$ref": "#/$defs/TemporalSegmentKind"
+    },
+    "ordinal": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "parentSegmentId": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Identifier"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "provenance": {
+      "$ref": "#/$defs/SegmentProvenance"
+    },
+    "segmentId": {
+      "$ref": "#/$defs/Identifier"
+    },
+    "segmentationPolicyRef": {
+      "$ref": "#/$defs/PolicyRef"
+    },
+    "startMs": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "segmentId",
+    "kind",
+    "startMs",
+    "endMs",
+    "ordinal",
+    "segmentationPolicyRef",
+    "provenance"
+  ],
+  "title": "TemporalSegment",
+  "type": "object"
+}

@@ -1,0 +1,230 @@
+{
+  "$defs": {
+    "ContainerInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "bitRateBps": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "durationMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "fileSizeBytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "formatName": {
+          "type": "string"
+        },
+        "startTimeMs": {
+          "format": "uint64",
+          "maximum": 0,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "formatName",
+        "fileSizeBytes"
+      ],
+      "type": "object"
+    },
+    "MediaStream": {
+      "additionalProperties": false,
+      "properties": {
+        "attachedPicture": {
+          "type": "boolean"
+        },
+        "averageFrameRate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rational"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "channelLayout": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "channels": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "codecName": {
+          "type": "string"
+        },
+        "codedHeight": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "codedWidth": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "defaultDisposition": {
+          "type": "boolean"
+        },
+        "displayHeight": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "displayWidth": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "durationMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "index": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind": {
+          "$ref": "#/$defs/StreamKind"
+        },
+        "rotationDegrees": {
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "sampleRate": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "startTimeMs": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "timeBase": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rational"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "index",
+        "kind",
+        "codecName",
+        "defaultDisposition",
+        "attachedPicture"
+      ],
+      "type": "object"
+    },
+    "Rational": {
+      "additionalProperties": false,
+      "description": "Wire rational number, e.g. a time base. The denominator must be positive.",
+      "properties": {
+        "den": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "num": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "num",
+        "den"
+      ],
+      "type": "object"
+    },
+    "StreamKind": {
+      "description": "Stream kinds recognized by the normalized media DTO.",
+      "enum": [
+        "video",
+        "audio",
+        "subtitle",
+        "data",
+        "attachment"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "container": {
+      "$ref": "#/$defs/ContainerInfo"
+    },
+    "primaryVideoStreamIndex": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "streams": {
+      "items": {
+        "$ref": "#/$defs/MediaStream"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "container",
+    "streams"
+  ],
+  "title": "NormalizedMedia",
+  "type": "object"
+}

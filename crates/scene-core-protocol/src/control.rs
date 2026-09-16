@@ -20,13 +20,13 @@ pub const DEFAULT_DEADLINE_MS: u64 = 120_000;
 /// Inclusive upper bound for `deadlineMs`.
 pub const MAX_DEADLINE_MS: u64 = 600_000;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum StartMessageType {
     #[serde(rename = "start")]
     Start,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum CancelMessageType {
     #[serde(rename = "cancel")]
     Cancel,
@@ -34,7 +34,7 @@ pub enum CancelMessageType {
 
 /// Host-facing start request. `executionContext` is required; `version` and
 /// `doctor` never use this DTO.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct StartRequest {
     pub engine_protocol_version: ProtocolVersion,
@@ -193,7 +193,7 @@ impl StartRequest {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct CancelRequest {
     pub engine_protocol_version: ProtocolVersion,

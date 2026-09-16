@@ -10,13 +10,13 @@ use crate::result::OperationResult;
 use crate::values::{Identifier, ProtocolVersion, Sha256Digest, StageName, UtcTimestamp};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum EventMessageType {
     #[serde(rename = "event")]
     Event,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum EventType {
     Accepted,
@@ -39,7 +39,7 @@ impl EventType {
 
 /// One engine event. Optional body fields are omitted from the wire form when
 /// they do not apply to the event type.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct EventEnvelope {
     pub engine_protocol_version: ProtocolVersion,

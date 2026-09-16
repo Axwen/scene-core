@@ -1,0 +1,214 @@
+{
+  "$defs": {
+    "CancelMessageType": {
+      "enum": [
+        "cancel"
+      ],
+      "type": "string"
+    },
+    "CancelRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "engineProtocolVersion": {
+          "$ref": "#/$defs/ProtocolVersion"
+        },
+        "messageType": {
+          "$ref": "#/$defs/CancelMessageType"
+        },
+        "requestId": {
+          "$ref": "#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "engineProtocolVersion",
+        "messageType",
+        "requestId"
+      ],
+      "type": "object"
+    },
+    "ExecutionContext": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "runId": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "scope": {
+          "$ref": "#/$defs/ExecutionScope"
+        }
+      },
+      "required": [
+        "runId",
+        "generation",
+        "attempt",
+        "scope"
+      ],
+      "type": "object"
+    },
+    "ExecutionScope": {
+      "description": "Request origin scope. `cacheScope` never enters the engine protocol.",
+      "enum": [
+        "asset",
+        "query",
+        "evaluation"
+      ],
+      "type": "string"
+    },
+    "Identifier": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "type": "string"
+    },
+    "InputDescriptor": {
+      "additionalProperties": false,
+      "description": "One staged logical input.",
+      "properties": {
+        "byteSize": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "contentHash": {
+          "$ref": "#/$defs/Sha256Digest"
+        },
+        "ref": {
+          "$ref": "#/$defs/InputRef"
+        },
+        "role": {
+          "$ref": "#/$defs/InputRole"
+        }
+      },
+      "required": [
+        "role",
+        "ref",
+        "contentHash",
+        "byteSize"
+      ],
+      "type": "object"
+    },
+    "InputRef": {
+      "const": "input/source.media",
+      "type": "string"
+    },
+    "InputRole": {
+      "const": "source_media",
+      "type": "string"
+    },
+    "Operation": {
+      "description": "Operations frozen by Protocol 0.1.",
+      "enum": [
+        "probe",
+        "extract_preview"
+      ],
+      "type": "string"
+    },
+    "OperationOptions": {
+      "description": "Caller-provided operation options.\n\nProtocol 0.1 registers no configurable options: the only accepted wire\nshape is `{}`. Unknown keys, duplicate keys and non-object shapes are\nrejected while parsing, so no free-form options map can enter the protocol.",
+      "type": "object"
+    },
+    "OutputContractVersion": {
+      "pattern": "^[a-z0-9-]+/[0-9]+$",
+      "type": "string"
+    },
+    "ProtocolVersion": {
+      "const": "0.1",
+      "type": "string"
+    },
+    "Sha256Digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "StartMessageType": {
+      "enum": [
+        "start"
+      ],
+      "type": "string"
+    },
+    "StartRequest": {
+      "additionalProperties": false,
+      "description": "Host-facing start request. `executionContext` is required; `version` and\n`doctor` never use this DTO.",
+      "properties": {
+        "deadlineMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "derivationKey": {
+          "$ref": "#/$defs/Sha256Digest"
+        },
+        "engineProtocolVersion": {
+          "$ref": "#/$defs/ProtocolVersion"
+        },
+        "executionContext": {
+          "$ref": "#/$defs/ExecutionContext"
+        },
+        "inputFingerprint": {
+          "$ref": "#/$defs/Sha256Digest"
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/InputDescriptor"
+          },
+          "type": "array"
+        },
+        "messageType": {
+          "$ref": "#/$defs/StartMessageType"
+        },
+        "operation": {
+          "$ref": "#/$defs/Operation"
+        },
+        "operationConfigHash": {
+          "$ref": "#/$defs/Sha256Digest"
+        },
+        "options": {
+          "$ref": "#/$defs/OperationOptions"
+        },
+        "outputContractVersion": {
+          "$ref": "#/$defs/OutputContractVersion"
+        },
+        "requestId": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "sourceVersionId": {
+          "$ref": "#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "engineProtocolVersion",
+        "messageType",
+        "requestId",
+        "operation",
+        "sourceVersionId",
+        "inputs",
+        "inputFingerprint",
+        "operationConfigHash",
+        "outputContractVersion",
+        "derivationKey",
+        "executionContext",
+        "options"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/StartRequest"
+    },
+    {
+      "$ref": "#/$defs/CancelRequest"
+    }
+  ],
+  "title": "ControlMessageSchema"
+}

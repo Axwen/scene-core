@@ -1,0 +1,777 @@
+{
+  "$defs": {
+    "Artifact": {
+      "additionalProperties": false,
+      "properties": {
+        "artifactId": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "byteSize": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "contentHash": {
+          "$ref": "#/$defs/Sha256Digest"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "mediaType": {
+          "$ref": "#/$defs/MediaType"
+        },
+        "pixelHeight": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "pixelWidth": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "presentationTimeMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "relativeRef": {
+          "$ref": "#/$defs/RelativeRef"
+        },
+        "requestedTimeMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "role": {
+          "$ref": "#/$defs/ArtifactRole"
+        }
+      },
+      "required": [
+        "artifactId",
+        "kind",
+        "role",
+        "mediaType",
+        "relativeRef",
+        "byteSize",
+        "contentHash",
+        "requestedTimeMs"
+      ],
+      "type": "object"
+    },
+    "ArtifactKind": {
+      "description": "Artifact kinds frozen by Protocol 0.1.",
+      "enum": [
+        "previewFrame"
+      ],
+      "type": "string"
+    },
+    "ArtifactManifest": {
+      "additionalProperties": false,
+      "description": "Manifest of one immutable Artifact set. Contains no timestamp or resource\nstatistics; `probe` never produces one.",
+      "properties": {
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/Artifact"
+          },
+          "type": "array"
+        },
+        "derivationKey": {
+          "$ref": "#/$defs/Sha256Digest"
+        },
+        "engine": {
+          "$ref": "#/$defs/EngineIdentity"
+        },
+        "inputFingerprint": {
+          "$ref": "#/$defs/Sha256Digest"
+        },
+        "manifestVersion": {
+          "$ref": "#/$defs/ProtocolVersion"
+        },
+        "operation": {
+          "$ref": "#/$defs/Operation"
+        },
+        "operationConfigHash": {
+          "$ref": "#/$defs/Sha256Digest"
+        },
+        "outputContractVersion": {
+          "$ref": "#/$defs/OutputContractVersion"
+        },
+        "requestId": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "sourceVersionId": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "toolchainFingerprint": {
+          "$ref": "#/$defs/Sha256Digest"
+        }
+      },
+      "required": [
+        "manifestVersion",
+        "requestId",
+        "sourceVersionId",
+        "inputFingerprint",
+        "derivationKey",
+        "operation",
+        "operationConfigHash",
+        "outputContractVersion",
+        "engine",
+        "toolchainFingerprint",
+        "artifacts"
+      ],
+      "type": "object"
+    },
+    "ArtifactRole": {
+      "description": "Fixed diagnostic preview roles.",
+      "enum": [
+        "opening",
+        "midpoint"
+      ],
+      "type": "string"
+    },
+    "CacheCompatibilityId": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "type": "string"
+    },
+    "CommitHash": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "ContainerInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "bitRateBps": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "durationMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "fileSizeBytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "formatName": {
+          "type": "string"
+        },
+        "startTimeMs": {
+          "format": "uint64",
+          "maximum": 0,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "formatName",
+        "fileSizeBytes"
+      ],
+      "type": "object"
+    },
+    "EngineIdentity": {
+      "additionalProperties": false,
+      "description": "Shared identity of the engine build. Reused by events, Manifests, `version`\nand `doctor`; no consumer may define an approximate variant.",
+      "properties": {
+        "engineCacheCompatibilityId": {
+          "$ref": "#/$defs/CacheCompatibilityId"
+        },
+        "engineCommit": {
+          "$ref": "#/$defs/CommitHash"
+        },
+        "engineVersion": {
+          "type": "string"
+        },
+        "implementedOperations": {
+          "items": {
+            "$ref": "#/$defs/Operation"
+          },
+          "type": "array"
+        },
+        "supportedProtocolVersions": {
+          "items": {
+            "$ref": "#/$defs/ProtocolVersion"
+          },
+          "type": "array"
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "engineVersion",
+        "engineCommit",
+        "target",
+        "engineCacheCompatibilityId",
+        "supportedProtocolVersions",
+        "implementedOperations"
+      ],
+      "type": "object"
+    },
+    "ErrorCode": {
+      "description": "Frozen Protocol 0.1 error codes.",
+      "enum": [
+        "INVALID_REQUEST",
+        "UNSUPPORTED_PROTOCOL",
+        "OPERATION_UNAVAILABLE",
+        "INPUT_NOT_FOUND",
+        "INPUT_CHANGED",
+        "UNSUPPORTED_INPUT",
+        "CORRUPT_MEDIA",
+        "MISSING_VIDEO_STREAM",
+        "RESOURCE_LIMIT",
+        "TOOL_UNAVAILABLE",
+        "TOOL_FAILED",
+        "TIMEOUT",
+        "CANCELLED",
+        "ENGINE_INTERNAL"
+      ],
+      "type": "string"
+    },
+    "EventMessageType": {
+      "enum": [
+        "event"
+      ],
+      "type": "string"
+    },
+    "EventType": {
+      "enum": [
+        "accepted",
+        "running",
+        "progress",
+        "completed",
+        "failed",
+        "cancelled",
+        "timed_out"
+      ],
+      "type": "string"
+    },
+    "ExecutionContext": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "runId": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "scope": {
+          "$ref": "#/$defs/ExecutionScope"
+        }
+      },
+      "required": [
+        "runId",
+        "generation",
+        "attempt",
+        "scope"
+      ],
+      "type": "object"
+    },
+    "ExecutionScope": {
+      "description": "Request origin scope. `cacheScope` never enters the engine protocol.",
+      "enum": [
+        "asset",
+        "query",
+        "evaluation"
+      ],
+      "type": "string"
+    },
+    "Identifier": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "type": "string"
+    },
+    "MediaStream": {
+      "additionalProperties": false,
+      "properties": {
+        "attachedPicture": {
+          "type": "boolean"
+        },
+        "averageFrameRate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rational"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "channelLayout": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "channels": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "codecName": {
+          "type": "string"
+        },
+        "codedHeight": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "codedWidth": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "defaultDisposition": {
+          "type": "boolean"
+        },
+        "displayHeight": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "displayWidth": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "durationMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "index": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind": {
+          "$ref": "#/$defs/StreamKind"
+        },
+        "rotationDegrees": {
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "sampleRate": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "startTimeMs": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "timeBase": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rational"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "index",
+        "kind",
+        "codecName",
+        "defaultDisposition",
+        "attachedPicture"
+      ],
+      "type": "object"
+    },
+    "MediaType": {
+      "pattern": "^[a-z0-9.+-_]+/[a-z0-9.+-_]+$",
+      "type": "string"
+    },
+    "NormalizedMedia": {
+      "additionalProperties": false,
+      "properties": {
+        "container": {
+          "$ref": "#/$defs/ContainerInfo"
+        },
+        "primaryVideoStreamIndex": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "streams": {
+          "items": {
+            "$ref": "#/$defs/MediaStream"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "container",
+        "streams"
+      ],
+      "type": "object"
+    },
+    "Operation": {
+      "description": "Operations frozen by Protocol 0.1.",
+      "enum": [
+        "probe",
+        "extract_preview"
+      ],
+      "type": "string"
+    },
+    "OperationResult": {
+      "description": "Tagged union of completed results, tagged by `operation`.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "media": {
+              "$ref": "#/$defs/NormalizedMedia"
+            },
+            "operation": {
+              "const": "probe",
+              "type": "string"
+            },
+            "resourceUsage": {
+              "$ref": "#/$defs/ResourceUsage"
+            }
+          },
+          "required": [
+            "operation",
+            "media",
+            "resourceUsage"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "artifactManifest": {
+              "$ref": "#/$defs/ArtifactManifest"
+            },
+            "media": {
+              "$ref": "#/$defs/NormalizedMedia"
+            },
+            "operation": {
+              "const": "extract_preview",
+              "type": "string"
+            },
+            "resourceUsage": {
+              "$ref": "#/$defs/ResourceUsage"
+            }
+          },
+          "required": [
+            "operation",
+            "media",
+            "artifactManifest",
+            "resourceUsage"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "OutputContractVersion": {
+      "pattern": "^[a-z0-9-]+/[0-9]+$",
+      "type": "string"
+    },
+    "ProtocolError": {
+      "additionalProperties": false,
+      "description": "Wire error payload. Only the fixed contract fields are allowed.",
+      "properties": {
+        "actual": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "cause": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "code": {
+          "$ref": "#/$defs/ErrorCode"
+        },
+        "limit": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "nextStep": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "stage": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "retryable"
+      ],
+      "type": "object"
+    },
+    "ProtocolVersion": {
+      "const": "0.1",
+      "type": "string"
+    },
+    "Rational": {
+      "additionalProperties": false,
+      "description": "Wire rational number, e.g. a time base. The denominator must be positive.",
+      "properties": {
+        "den": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "num": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "num",
+        "den"
+      ],
+      "type": "object"
+    },
+    "RelativeRef": {
+      "maxLength": 1024,
+      "minLength": 1,
+      "type": "string"
+    },
+    "ResourceUsage": {
+      "additionalProperties": false,
+      "description": "Resource accounting attached to a completed result. Phase 0 freezes the\nfield boundary; Phase 1 fills the values.",
+      "properties": {
+        "cpuTimeMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "peakMemoryBytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "wallTimeMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "wallTimeMs"
+      ],
+      "type": "object"
+    },
+    "Sha256Digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "StageName": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+      "type": "string"
+    },
+    "StreamKind": {
+      "description": "Stream kinds recognized by the normalized media DTO.",
+      "enum": [
+        "video",
+        "audio",
+        "subtitle",
+        "data",
+        "attachment"
+      ],
+      "type": "string"
+    },
+    "UtcTimestamp": {
+      "format": "date-time",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "One engine event. Optional body fields are omitted from the wire form when\nthey do not apply to the event type.",
+  "properties": {
+    "completed": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "derivationKey": {
+      "$ref": "#/$defs/Sha256Digest"
+    },
+    "engine": {
+      "$ref": "#/$defs/EngineIdentity"
+    },
+    "engineProtocolVersion": {
+      "$ref": "#/$defs/ProtocolVersion"
+    },
+    "error": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ProtocolError"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "eventType": {
+      "$ref": "#/$defs/EventType"
+    },
+    "executionContext": {
+      "$ref": "#/$defs/ExecutionContext"
+    },
+    "inputFingerprint": {
+      "$ref": "#/$defs/Sha256Digest"
+    },
+    "messageType": {
+      "$ref": "#/$defs/EventMessageType"
+    },
+    "occurredAt": {
+      "$ref": "#/$defs/UtcTimestamp"
+    },
+    "operation": {
+      "$ref": "#/$defs/Operation"
+    },
+    "requestId": {
+      "$ref": "#/$defs/Identifier"
+    },
+    "result": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/OperationResult"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sequence": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "sourceVersionId": {
+      "$ref": "#/$defs/Identifier"
+    },
+    "stage": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StageName"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "total": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "engineProtocolVersion",
+    "messageType",
+    "requestId",
+    "sourceVersionId",
+    "inputFingerprint",
+    "derivationKey",
+    "operation",
+    "sequence",
+    "eventType",
+    "engine",
+    "executionContext",
+    "occurredAt"
+  ],
+  "title": "EventEnvelope",
+  "type": "object"
+}

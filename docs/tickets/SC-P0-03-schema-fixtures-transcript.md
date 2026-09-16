@@ -20,6 +20,17 @@
 4. canonical JSON 的字段顺序、Unicode、null 和 hash 测试有固定 golden 结果；每个 fixture 可由 manifest 追溯到唯一规则和错误码。
 5. Schema 允许有符号 stream.startTimeMs，但拒绝负公共请求时间；container.startTimeMs 只接受 0/null。向量覆盖 80ms 音视频偏移、负原点、未知原点、±1.5ms 舍入及 [1.2,1.8)ms 向外取整。
 
+## 实现状态（2026-09-16，增量一：Schema）
+
+- `schemars` 已作为 `scene-core-protocol` 的常规依赖：DTO 派生 `JsonSchema`，严格字符串类型（Identifier、Sha256Digest、ProtocolVersion、InputRef、UtcTimestamp 等）手写 `JsonSchema` 并带 pattern/const/format 约束；`container.startTimeMs` 在 Schema 中为 `maximum: 0` 且允许 null。
+- `tests/schema_contract.rs` 从 DTO 生成并对比 `schemas/0.1/*.json`；`scripts/check-schema-drift.sh` 已替换为生成式 drift gate，CI 现有的 `cargo test --workspace` 同时覆盖。重生成：`UPDATE_SCHEMAS=1 cargo test -p scene-core-protocol --test schema_contract`。
+- 已生成：control-message、engine-event、normalized-media、artifact-manifest、temporal-segment、input-set-descriptor、derivation-descriptor，以及共享的 engine-identity、toolchain-identity。
+- 验收 5 的 Schema 断言已覆盖：有符号 `stream.startTimeMs`、`container.startTimeMs` 仅 0/null、公共 `requestedTimeMs` 非负。
+
+未完成：
+- version、doctor、package manifest 的 Schema 需要 SC-P0-04 冻结对应 DTO；toolchain descriptor、capabilities 需要 SC-P0-05 确定产物结构；生成器支持一行注册新类型。
+- fixture（≥10 valid / ≥20 invalid / ≥6 golden）、`fixture-manifest.json` 与 fixture runner 待交付。
+
 ## 依赖
 
 SC-P0-02。

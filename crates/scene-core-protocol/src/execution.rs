@@ -5,7 +5,7 @@ use crate::values::Identifier;
 use serde::{Deserialize, Serialize};
 
 /// Request origin scope. `cacheScope` never enters the engine protocol.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecutionScope {
     Asset,
@@ -13,7 +13,7 @@ pub enum ExecutionScope {
     Evaluation,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ExecutionContext {
     pub run_id: Identifier,

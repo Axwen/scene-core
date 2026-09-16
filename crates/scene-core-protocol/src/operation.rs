@@ -5,7 +5,19 @@ use crate::values::OutputContractVersion;
 use serde::{Deserialize, Serialize};
 
 /// Operations frozen by Protocol 0.1.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    schemars::JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum Operation {
     Probe,
@@ -40,7 +52,7 @@ impl Operation {
 /// Protocol 0.1 registers no configurable options: the only accepted wire
 /// shape is `{}`. Unknown keys, duplicate keys and non-object shapes are
 /// rejected while parsing, so no free-form options map can enter the protocol.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, schemars::JsonSchema)]
 pub struct OperationOptions {}
 
 impl<'de> Deserialize<'de> for OperationOptions {

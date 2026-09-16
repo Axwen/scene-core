@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 /// Resource accounting attached to a completed result. Phase 0 freezes the
 /// field boundary; Phase 1 fills the values.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ResourceUsage {
     pub wall_time_ms: u64,
@@ -20,7 +20,7 @@ pub struct ResourceUsage {
     pub peak_memory_bytes: Option<u64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ProbeResult {
     pub media: NormalizedMedia,
@@ -33,7 +33,7 @@ impl ProbeResult {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ExtractPreviewResult {
     pub media: NormalizedMedia,
@@ -49,7 +49,7 @@ impl ExtractPreviewResult {
 }
 
 /// Tagged union of completed results, tagged by `operation`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "operation", rename_all = "snake_case")]
 pub enum OperationResult {
     Probe(ProbeResult),

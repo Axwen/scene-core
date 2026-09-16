@@ -1,0 +1,70 @@
+{
+  "$defs": {
+    "DescriptorVersion": {
+      "description": "Frozen descriptor schema revision. Protocol 0.1 registers only `\"1\"` for\nboth `inputSetVersion` and `derivationDescriptorVersion`.",
+      "enum": [
+        "1"
+      ],
+      "type": "string"
+    },
+    "InputDescriptor": {
+      "additionalProperties": false,
+      "description": "One staged logical input.",
+      "properties": {
+        "byteSize": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "contentHash": {
+          "$ref": "#/$defs/Sha256Digest"
+        },
+        "ref": {
+          "$ref": "#/$defs/InputRef"
+        },
+        "role": {
+          "$ref": "#/$defs/InputRole"
+        }
+      },
+      "required": [
+        "role",
+        "ref",
+        "contentHash",
+        "byteSize"
+      ],
+      "type": "object"
+    },
+    "InputRef": {
+      "const": "input/source.media",
+      "type": "string"
+    },
+    "InputRole": {
+      "const": "source_media",
+      "type": "string"
+    },
+    "Sha256Digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Versioned logical input set. `0.1` allows exactly one `source_media`.",
+  "properties": {
+    "inputSetVersion": {
+      "$ref": "#/$defs/DescriptorVersion"
+    },
+    "inputs": {
+      "items": {
+        "$ref": "#/$defs/InputDescriptor"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "inputSetVersion",
+    "inputs"
+  ],
+  "title": "InputSetDescriptor",
+  "type": "object"
+}

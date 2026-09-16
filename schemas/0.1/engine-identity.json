@@ -1,0 +1,63 @@
+{
+  "$defs": {
+    "CacheCompatibilityId": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "type": "string"
+    },
+    "CommitHash": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "Operation": {
+      "description": "Operations frozen by Protocol 0.1.",
+      "enum": [
+        "probe",
+        "extract_preview"
+      ],
+      "type": "string"
+    },
+    "ProtocolVersion": {
+      "const": "0.1",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Shared identity of the engine build. Reused by events, Manifests, `version`\nand `doctor`; no consumer may define an approximate variant.",
+  "properties": {
+    "engineCacheCompatibilityId": {
+      "$ref": "#/$defs/CacheCompatibilityId"
+    },
+    "engineCommit": {
+      "$ref": "#/$defs/CommitHash"
+    },
+    "engineVersion": {
+      "type": "string"
+    },
+    "implementedOperations": {
+      "items": {
+        "$ref": "#/$defs/Operation"
+      },
+      "type": "array"
+    },
+    "supportedProtocolVersions": {
+      "items": {
+        "$ref": "#/$defs/ProtocolVersion"
+      },
+      "type": "array"
+    },
+    "target": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "engineVersion",
+    "engineCommit",
+    "target",
+    "engineCacheCompatibilityId",
+    "supportedProtocolVersions",
+    "implementedOperations"
+  ],
+  "title": "EngineIdentity",
+  "type": "object"
+}

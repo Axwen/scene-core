@@ -562,7 +562,7 @@ validated_string!(
 
 /// Frozen descriptor schema revision. Protocol 0.1 registers only `"1"` for
 /// both `inputSetVersion` and `derivationDescriptorVersion`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum DescriptorVersion {
     #[serde(rename = "1")]
     V1,
@@ -584,6 +584,65 @@ impl fmt::Display for DescriptorVersion {
         formatter.write_str(self.as_str())
     }
 }
+
+macro_rules! string_schema {
+    ($name:ident, $schema:tt) => {
+        impl schemars::JsonSchema for $name {
+            fn schema_name() -> std::borrow::Cow<'static, str> {
+                std::borrow::Cow::Borrowed(stringify!($name))
+            }
+
+            fn schema_id() -> std::borrow::Cow<'static, str> {
+                std::borrow::Cow::Borrowed(concat!(
+                    "scene_core_protocol::values::",
+                    stringify!($name)
+                ))
+            }
+
+            fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+                schemars::json_schema!($schema)
+            }
+        }
+    };
+}
+
+string_schema!(
+    Identifier,
+    {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"}
+);
+string_schema!(CommitHash, {"type": "string", "pattern": "^[0-9a-f]{40}$"});
+string_schema!(
+    CacheCompatibilityId,
+    {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"}
+);
+string_schema!(
+    Sha256Digest,
+    {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+);
+string_schema!(ProtocolVersion, {"type": "string", "const": "0.1"});
+string_schema!(
+    OutputContractVersion,
+    {"type": "string", "pattern": "^[a-z0-9-]+/[0-9]+$"}
+);
+string_schema!(
+    RelativeRef,
+    {"type": "string", "minLength": 1, "maxLength": 1024}
+);
+string_schema!(InputRef, {"type": "string", "const": "input/source.media"});
+string_schema!(
+    PolicyRef,
+    {"type": "string", "pattern": "^[^@]+@[A-Za-z0-9._-]+$", "maxLength": 200}
+);
+string_schema!(
+    MediaType,
+    {"type": "string", "pattern": "^[a-z0-9.+-_]+/[a-z0-9.+-_]+$"}
+);
+string_schema!(
+    StageName,
+    {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"}
+);
+string_schema!(InputRole, {"type": "string", "const": "source_media"});
+string_schema!(UtcTimestamp, {"type": "string", "format": "date-time"});
 
 impl Sha256Digest {
     /// Hashes `bytes` and returns the canonical `sha256:<hex>` digest.

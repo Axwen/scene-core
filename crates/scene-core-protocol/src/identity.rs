@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 /// Shared identity of the engine build. Reused by events, Manifests, `version`
 /// and `doctor`; no consumer may define an approximate variant.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct EngineIdentity {
     pub engine_version: String,
@@ -49,7 +49,7 @@ impl EngineIdentity {
 /// Shared fixed-toolchain identity. The fingerprint covers target, FFmpeg and
 /// FFprobe versions, build source, configure flags, capabilities and the
 /// dynamic library closure.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ToolchainIdentity {
     pub toolchain_fingerprint: Sha256Digest,
@@ -78,7 +78,7 @@ pub struct DerivationIdentity {
 
 /// Cache derivation input. Excludes request/run/source/execution identity so
 /// the same logical media work derives the same key on Host and Core.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct DerivationDescriptor {
     pub derivation_descriptor_version: DescriptorVersion,

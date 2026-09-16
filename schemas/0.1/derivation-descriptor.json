@@ -1,0 +1,68 @@
+{
+  "$defs": {
+    "CacheCompatibilityId": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "type": "string"
+    },
+    "DescriptorVersion": {
+      "description": "Frozen descriptor schema revision. Protocol 0.1 registers only `\"1\"` for\nboth `inputSetVersion` and `derivationDescriptorVersion`.",
+      "enum": [
+        "1"
+      ],
+      "type": "string"
+    },
+    "Operation": {
+      "description": "Operations frozen by Protocol 0.1.",
+      "enum": [
+        "probe",
+        "extract_preview"
+      ],
+      "type": "string"
+    },
+    "OutputContractVersion": {
+      "pattern": "^[a-z0-9-]+/[0-9]+$",
+      "type": "string"
+    },
+    "Sha256Digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Cache derivation input. Excludes request/run/source/execution identity so\nthe same logical media work derives the same key on Host and Core.",
+  "properties": {
+    "derivationDescriptorVersion": {
+      "$ref": "#/$defs/DescriptorVersion"
+    },
+    "engineCacheCompatibilityId": {
+      "$ref": "#/$defs/CacheCompatibilityId"
+    },
+    "inputFingerprint": {
+      "$ref": "#/$defs/Sha256Digest"
+    },
+    "operation": {
+      "$ref": "#/$defs/Operation"
+    },
+    "operationConfigHash": {
+      "$ref": "#/$defs/Sha256Digest"
+    },
+    "outputContractVersion": {
+      "$ref": "#/$defs/OutputContractVersion"
+    },
+    "toolchainFingerprint": {
+      "$ref": "#/$defs/Sha256Digest"
+    }
+  },
+  "required": [
+    "derivationDescriptorVersion",
+    "inputFingerprint",
+    "operation",
+    "operationConfigHash",
+    "outputContractVersion",
+    "engineCacheCompatibilityId",
+    "toolchainFingerprint"
+  ],
+  "title": "DerivationDescriptor",
+  "type": "object"
+}

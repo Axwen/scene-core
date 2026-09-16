@@ -1,0 +1,223 @@
+{
+  "$defs": {
+    "Artifact": {
+      "additionalProperties": false,
+      "properties": {
+        "artifactId": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "byteSize": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "contentHash": {
+          "$ref": "#/$defs/Sha256Digest"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "mediaType": {
+          "$ref": "#/$defs/MediaType"
+        },
+        "pixelHeight": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "pixelWidth": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "presentationTimeMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "relativeRef": {
+          "$ref": "#/$defs/RelativeRef"
+        },
+        "requestedTimeMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "role": {
+          "$ref": "#/$defs/ArtifactRole"
+        }
+      },
+      "required": [
+        "artifactId",
+        "kind",
+        "role",
+        "mediaType",
+        "relativeRef",
+        "byteSize",
+        "contentHash",
+        "requestedTimeMs"
+      ],
+      "type": "object"
+    },
+    "ArtifactKind": {
+      "description": "Artifact kinds frozen by Protocol 0.1.",
+      "enum": [
+        "previewFrame"
+      ],
+      "type": "string"
+    },
+    "ArtifactRole": {
+      "description": "Fixed diagnostic preview roles.",
+      "enum": [
+        "opening",
+        "midpoint"
+      ],
+      "type": "string"
+    },
+    "CacheCompatibilityId": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "type": "string"
+    },
+    "CommitHash": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "EngineIdentity": {
+      "additionalProperties": false,
+      "description": "Shared identity of the engine build. Reused by events, Manifests, `version`\nand `doctor`; no consumer may define an approximate variant.",
+      "properties": {
+        "engineCacheCompatibilityId": {
+          "$ref": "#/$defs/CacheCompatibilityId"
+        },
+        "engineCommit": {
+          "$ref": "#/$defs/CommitHash"
+        },
+        "engineVersion": {
+          "type": "string"
+        },
+        "implementedOperations": {
+          "items": {
+            "$ref": "#/$defs/Operation"
+          },
+          "type": "array"
+        },
+        "supportedProtocolVersions": {
+          "items": {
+            "$ref": "#/$defs/ProtocolVersion"
+          },
+          "type": "array"
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "engineVersion",
+        "engineCommit",
+        "target",
+        "engineCacheCompatibilityId",
+        "supportedProtocolVersions",
+        "implementedOperations"
+      ],
+      "type": "object"
+    },
+    "Identifier": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "type": "string"
+    },
+    "MediaType": {
+      "pattern": "^[a-z0-9.+-_]+/[a-z0-9.+-_]+$",
+      "type": "string"
+    },
+    "Operation": {
+      "description": "Operations frozen by Protocol 0.1.",
+      "enum": [
+        "probe",
+        "extract_preview"
+      ],
+      "type": "string"
+    },
+    "OutputContractVersion": {
+      "pattern": "^[a-z0-9-]+/[0-9]+$",
+      "type": "string"
+    },
+    "ProtocolVersion": {
+      "const": "0.1",
+      "type": "string"
+    },
+    "RelativeRef": {
+      "maxLength": 1024,
+      "minLength": 1,
+      "type": "string"
+    },
+    "Sha256Digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Manifest of one immutable Artifact set. Contains no timestamp or resource\nstatistics; `probe` never produces one.",
+  "properties": {
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/Artifact"
+      },
+      "type": "array"
+    },
+    "derivationKey": {
+      "$ref": "#/$defs/Sha256Digest"
+    },
+    "engine": {
+      "$ref": "#/$defs/EngineIdentity"
+    },
+    "inputFingerprint": {
+      "$ref": "#/$defs/Sha256Digest"
+    },
+    "manifestVersion": {
+      "$ref": "#/$defs/ProtocolVersion"
+    },
+    "operation": {
+      "$ref": "#/$defs/Operation"
+    },
+    "operationConfigHash": {
+      "$ref": "#/$defs/Sha256Digest"
+    },
+    "outputContractVersion": {
+      "$ref": "#/$defs/OutputContractVersion"
+    },
+    "requestId": {
+      "$ref": "#/$defs/Identifier"
+    },
+    "sourceVersionId": {
+      "$ref": "#/$defs/Identifier"
+    },
+    "toolchainFingerprint": {
+      "$ref": "#/$defs/Sha256Digest"
+    }
+  },
+  "required": [
+    "manifestVersion",
+    "requestId",
+    "sourceVersionId",
+    "inputFingerprint",
+    "derivationKey",
+    "operation",
+    "operationConfigHash",
+    "outputContractVersion",
+    "engine",
+    "toolchainFingerprint",
+    "artifacts"
+  ],
+  "title": "ArtifactManifest",
+  "type": "object"
+}

@@ -20,7 +20,7 @@ use std::fmt;
 const MS_PER_SECOND: i128 = 1000;
 
 /// Wire rational number, e.g. a time base. The denominator must be positive.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Rational {
     pub num: i64,
