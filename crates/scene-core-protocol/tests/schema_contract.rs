@@ -8,8 +8,9 @@
 //! ```
 
 use scene_core_protocol::{
-    ArtifactManifest, CancelRequest, DerivationDescriptor, EngineIdentity, EventEnvelope,
-    InputSetDescriptor, NormalizedMedia, StartRequest, TemporalSegment, ToolchainIdentity,
+    ArtifactManifest, CancelRequest, DerivationDescriptor, DoctorOutput, EngineIdentity,
+    EventEnvelope, InputSetDescriptor, NormalizedMedia, PackageManifest, StartRequest,
+    TemporalSegment, ToolchainIdentity, VersionOutput,
 };
 use serde_json::Value;
 use std::fs;
@@ -43,17 +44,20 @@ fn generated_schemas() -> Vec<(&'static str, Value)> {
             schema_value::<DerivationDescriptor>(),
         ),
         ("engine-event.json", schema_value::<EventEnvelope>()),
+        ("doctor.json", schema_value::<DoctorOutput>()),
         ("engine-identity.json", schema_value::<EngineIdentity>()),
         (
             "input-set-descriptor.json",
             schema_value::<InputSetDescriptor>(),
         ),
         ("normalized-media.json", schema_value::<NormalizedMedia>()),
+        ("package-manifest.json", schema_value::<PackageManifest>()),
         ("temporal-segment.json", schema_value::<TemporalSegment>()),
         (
             "toolchain-identity.json",
             schema_value::<ToolchainIdentity>(),
         ),
+        ("version.json", schema_value::<VersionOutput>()),
     ];
     schemas.sort_by_key(|(name, _)| *name);
     schemas

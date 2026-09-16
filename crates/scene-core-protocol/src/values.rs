@@ -356,6 +356,45 @@ fn validate_stage_name(value: &str) -> Result<(), &'static str> {
     )
 }
 
+fn validate_tool_name(value: &str) -> Result<(), &'static str> {
+    bounded(value, 32)?;
+    starts_with(
+        value,
+        |byte| byte.is_ascii_lowercase(),
+        "must start with a lowercase ASCII letter",
+    )?;
+    uses_only(
+        value,
+        |byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-',
+        "may only contain lowercase ASCII letters, digits or '-'",
+    )
+}
+
+fn validate_license_expression(value: &str) -> Result<(), &'static str> {
+    bounded(value, 128)?;
+    uses_only(
+        value,
+        |byte| {
+            byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'+' | b'-' | b'(' | b')' | b' ')
+        },
+        "must be an SPDX-like license expression",
+    )
+}
+
+fn validate_check_name(value: &str) -> Result<(), &'static str> {
+    bounded(value, 64)?;
+    starts_with(
+        value,
+        |byte| byte.is_ascii_lowercase(),
+        "must start with a lowercase ASCII letter",
+    )?;
+    uses_only(
+        value,
+        |byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-',
+        "may only contain lowercase ASCII letters, digits or '-'",
+    )
+}
+
 fn validate_input_role(value: &str) -> Result<(), &'static str> {
     bounded(value, 64)?;
     starts_with(
@@ -560,6 +599,27 @@ validated_string!(
     validate_utc_timestamp
 );
 
+validated_string!(
+    /// Fixed tool name from the package manifest, such as `ffmpeg`.
+    ToolName,
+    "tool name",
+    validate_tool_name
+);
+
+validated_string!(
+    /// SPDX-like license expression such as `LGPL-2.1-or-later`.
+    LicenseExpression,
+    "license expression",
+    validate_license_expression
+);
+
+validated_string!(
+    /// Stable doctor check name such as `package-manifest`.
+    DoctorCheckName,
+    "doctor check name",
+    validate_check_name
+);
+
 /// Frozen descriptor schema revision. Protocol 0.1 registers only `"1"` for
 /// both `inputSetVersion` and `derivationDescriptorVersion`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, schemars::JsonSchema)]
@@ -643,6 +703,18 @@ string_schema!(
 );
 string_schema!(InputRole, {"type": "string", "const": "source_media"});
 string_schema!(UtcTimestamp, {"type": "string", "format": "date-time"});
+string_schema!(
+    ToolName,
+    {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$"}
+);
+string_schema!(
+    LicenseExpression,
+    {"type": "string", "pattern": "^[A-Za-z0-9.()+-]+( [A-Za-z0-9.()+-]+)*$"}
+);
+string_schema!(
+    DoctorCheckName,
+    {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$"}
+);
 
 impl Sha256Digest {
     /// Hashes `bytes` and returns the canonical `sha256:<hex>` digest.

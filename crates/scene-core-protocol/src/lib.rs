@@ -8,6 +8,7 @@
 //! share one definition.
 
 pub mod canonical;
+pub mod cli;
 pub mod control;
 pub mod error;
 pub mod event;
@@ -18,12 +19,14 @@ pub mod input;
 pub mod manifest;
 pub mod media;
 pub mod operation;
+pub mod package;
 pub mod result;
 pub mod segment;
 pub mod time;
 pub mod values;
 
 pub use canonical::{CanonicalJsonError, canonical_sha256, to_canonical_json};
+pub use cli::{DoctorCheck, DoctorCheckCode, DoctorOutput, DoctorStatus, VersionOutput};
 pub use control::{
     CancelMessageType, CancelRequest, ControlMessage, ControlStreamValidator, DEFAULT_DEADLINE_MS,
     MAX_DEADLINE_MS, StartMessageType, StartRequest, parse_control_line,
@@ -39,6 +42,9 @@ pub use input::{
 pub use manifest::{Artifact, ArtifactKind, ArtifactManifest, ArtifactRole};
 pub use media::{ContainerInfo, MediaStream, NormalizedMedia, StreamKind};
 pub use operation::{Operation, OperationOptions};
+pub use package::{
+    DistributionProfile, PackageManifest, PackagedEngine, PackagedFile, PackagedTool,
+};
 pub use result::{ExtractPreviewResult, OperationResult, ProbeResult, ResourceUsage};
 pub use segment::{
     SegmentProvenance, TemporalSegment, TemporalSegmentKind, validate_temporal_segments,
@@ -48,9 +54,9 @@ pub use time::{
     round_public_range_ms, stream_start_ms,
 };
 pub use values::{
-    CacheCompatibilityId, CommitHash, DescriptorVersion, Identifier, InputRef, InputRole,
-    InvalidValue, MediaType, OutputContractVersion, PolicyRef, ProtocolVersion, RelativeRef,
-    Sha256Digest, StageName, UtcTimestamp,
+    CacheCompatibilityId, CommitHash, DescriptorVersion, DoctorCheckName, Identifier, InputRef,
+    InputRole, InvalidValue, LicenseExpression, MediaType, OutputContractVersion, PolicyRef,
+    ProtocolVersion, RelativeRef, Sha256Digest, StageName, ToolName, UtcTimestamp,
 };
 
 /// Frozen Host-facing protocol version.

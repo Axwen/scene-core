@@ -1,0 +1,217 @@
+{
+  "$defs": {
+    "CacheCompatibilityId": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "type": "string"
+    },
+    "CommitHash": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "DescriptorVersion": {
+      "description": "Frozen descriptor schema revision. Protocol 0.1 registers only `\"1\"` for\nboth `inputSetVersion` and `derivationDescriptorVersion`.",
+      "enum": [
+        "1"
+      ],
+      "type": "string"
+    },
+    "DistributionProfile": {
+      "description": "Distribution license profile of the bundle.",
+      "enum": [
+        "lgpl"
+      ],
+      "type": "string"
+    },
+    "LicenseExpression": {
+      "pattern": "^[A-Za-z0-9.()+-]+( [A-Za-z0-9.()+-]+)*$",
+      "type": "string"
+    },
+    "Operation": {
+      "description": "Operations frozen by Protocol 0.1.",
+      "enum": [
+        "probe",
+        "extract_preview"
+      ],
+      "type": "string"
+    },
+    "PackagedEngine": {
+      "additionalProperties": false,
+      "description": "Engine entry of the package manifest.",
+      "properties": {
+        "commit": {
+          "$ref": "#/$defs/CommitHash"
+        },
+        "engineCacheCompatibilityId": {
+          "$ref": "#/$defs/CacheCompatibilityId"
+        },
+        "implementedOperations": {
+          "items": {
+            "$ref": "#/$defs/Operation"
+          },
+          "type": "array"
+        },
+        "path": {
+          "$ref": "#/$defs/RelativeRef"
+        },
+        "supportedProtocolVersions": {
+          "items": {
+            "$ref": "#/$defs/ProtocolVersion"
+          },
+          "type": "array"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "version",
+        "commit",
+        "engineCacheCompatibilityId",
+        "supportedProtocolVersions",
+        "implementedOperations"
+      ],
+      "type": "object"
+    },
+    "PackagedFile": {
+      "additionalProperties": false,
+      "description": "One file listed with its integrity data.",
+      "properties": {
+        "byteSize": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "$ref": "#/$defs/RelativeRef"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Digest"
+        }
+      },
+      "required": [
+        "path",
+        "byteSize",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "PackagedTool": {
+      "additionalProperties": false,
+      "description": "Fixed tool entry of the package manifest.",
+      "properties": {
+        "licenseProfile": {
+          "$ref": "#/$defs/LicenseExpression"
+        },
+        "name": {
+          "$ref": "#/$defs/ToolName"
+        },
+        "path": {
+          "$ref": "#/$defs/RelativeRef"
+        },
+        "sourceSha256": {
+          "$ref": "#/$defs/Sha256Digest"
+        },
+        "sourceUrl": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "path",
+        "version",
+        "sourceUrl",
+        "sourceSha256",
+        "licenseProfile"
+      ],
+      "type": "object"
+    },
+    "ProtocolVersion": {
+      "const": "0.1",
+      "type": "string"
+    },
+    "RelativeRef": {
+      "maxLength": 1024,
+      "minLength": 1,
+      "type": "string"
+    },
+    "Sha256Digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "ToolName": {
+      "pattern": "^[a-z][a-z0-9-]{0,31}$",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Bundle package manifest. Never lists itself and never carries a timestamp.",
+  "properties": {
+    "capabilitiesRef": {
+      "$ref": "#/$defs/RelativeRef"
+    },
+    "distributionProfile": {
+      "$ref": "#/$defs/DistributionProfile"
+    },
+    "engine": {
+      "$ref": "#/$defs/PackagedEngine"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/PackagedFile"
+      },
+      "type": "array"
+    },
+    "name": {
+      "type": "string"
+    },
+    "packageManifestVersion": {
+      "$ref": "#/$defs/DescriptorVersion"
+    },
+    "packageVersion": {
+      "type": "string"
+    },
+    "sbomRef": {
+      "$ref": "#/$defs/RelativeRef"
+    },
+    "target": {
+      "type": "string"
+    },
+    "thirdPartyLicensesRef": {
+      "$ref": "#/$defs/RelativeRef"
+    },
+    "toolchainDescriptorRef": {
+      "$ref": "#/$defs/RelativeRef"
+    },
+    "toolchainFingerprint": {
+      "$ref": "#/$defs/Sha256Digest"
+    },
+    "tools": {
+      "items": {
+        "$ref": "#/$defs/PackagedTool"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "packageManifestVersion",
+    "name",
+    "packageVersion",
+    "target",
+    "distributionProfile",
+    "toolchainFingerprint",
+    "toolchainDescriptorRef",
+    "capabilitiesRef",
+    "engine",
+    "tools",
+    "files",
+    "sbomRef",
+    "thirdPartyLicensesRef"
+  ],
+  "title": "PackageManifest",
+  "type": "object"
+}

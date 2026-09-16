@@ -18,6 +18,18 @@
 3. manifest 不自引用；所有非自身 bundle 文件均有相对 path、byteSize、SHA-256。
 4. doctor 不输出绝对路径、完整 argv、原始 stderr 或敏感信息；stdout 始终是单个稳定 JSON object，stderr 仅用于无法产生 JSON 的进程级故障。
 
+## 实现状态（2026-09-16，增量一：DTO 与 Schema）
+
+- `crates/scene-core-protocol` 新增 `package.rs`：`PackageManifest`、`PackagedEngine`、`PackagedTool`、`PackagedFile`、`DistributionProfile`；校验覆盖逐文件按 path 字节序排序、禁止自引用、engine/tools/toolchain-descriptor/capabilities/SBOM 引用必须出现在 files 中、工具顺序固定为 ffmpeg/ffprobe、sourceUrl 必须是不可变 https。
+- 新增 `cli.rs`：`VersionOutput`（扁平输出共享 EngineIdentity 字段 + toolchainFingerprint + schemaVersion）、`DoctorOutput`/`DoctorCheck`/`DoctorStatus`/`DoctorCheckCode`；failed 检查必须带 code 与 nextStep，整体 status 与 checks 必须一致。
+- `schemas/0.1/` 新增 `package-manifest.json`、`version.json`、`doctor.json`，共 12 个 Schema，全部由 DTO 生成并受 drift gate 保护。
+- 新增严格字符串类型 `ToolName`、`LicenseExpression`、`DoctorCheckName`；测试总数 100。
+- doctor 退出码约定：成功 0，失败取首个失败 check 的 `DoctorCheckCode` 退出码（`TEMP_DIR_UNAVAILABLE` 为 3，其余为 2）。
+
+未完成：
+
+- engine crate 的 `version`/`doctor` CLI、合成 bundle fixture 与命令执行抽象；包外信任锚（manifest digest）与真实 FFmpeg/FFprobe 启动、DLL closure 验证依赖 SC-P0-05/06。
+
 ## 依赖
 
 SC-P0-01、SC-P0-03。
