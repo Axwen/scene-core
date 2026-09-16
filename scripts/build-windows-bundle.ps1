@@ -155,6 +155,42 @@ $descriptorPath = Join-Path $bundle "toolchain-descriptor.json"
 Write-JsonFile $descriptorPath $descriptor
 $toolchainFingerprint = Get-FileSha256 $descriptorPath
 
+$licenseProfile = $lock.GetProperty("license").GetProperty("profile").GetString()
+$toolVersion = $lock.GetProperty("ffmpegVersion").GetString()
+$spdxPackages = New-Object System.Collections.Generic.List[object]
+$spdxPackages.Add([ordered]@{
+    SPDXID = "SPDXRef-Package-scene-core"
+    name = "scene-core"
+    versionInfo = $Version
+    downloadLocation = "NOASSERTION"
+    licenseConcluded = "NOASSERTION"
+    filesAnalyzed = $false
+})
+foreach ($component in @(
+        [ordered]@{ id = "ffmpeg"; name = "ffmpeg"; version = $lock.GetProperty("ffmpegVersion").GetString(); location = $archive.GetProperty("url").GetString() },
+        [ordered]@{ id = "ffprobe"; name = "ffprobe"; version = $lock.GetProperty("ffprobeVersion").GetString(); location = $archive.GetProperty("url").GetString() }
+    )) {
+    $spdxPackages.Add([ordered]@{
+        SPDXID = "SPDXRef-Package-$($component["id"])"
+        name = $component["name"]
+        versionInfo = $component["version"]
+        downloadLocation = $component["location"]
+        licenseConcluded = $licenseProfile
+        filesAnalyzed = $false
+    })
+}
+foreach ($library in $archive.GetProperty("sharedLibraries").EnumerateArray()) {
+    $file = [System.IO.Path]::GetFileName($library.GetString())
+    $componentId = [System.IO.Path]::GetFileNameWithoutExtension($file)
+    $spdxPackages.Add([ordered]@{
+        SPDXID = "SPDXRef-Package-$componentId"
+        name = $componentId
+        versionInfo = $toolVersion
+        downloadLocation = $archive.GetProperty("url").GetString()
+        licenseConcluded = $licenseProfile
+        filesAnalyzed = $false
+    })
+}
 $spdx = [ordered]@{
     spdxVersion = "SPDX-2.3"
     dataLicense = "CC0-1.0"
@@ -165,30 +201,14 @@ $spdx = [ordered]@{
         created = $build.GetProperty("publishedAt").GetString()
         creators = @("Tool: scene-core build-windows-bundle.ps1")
     }
-    packages = @(
-        [ordered]@{
-            SPDXID = "SPDXRef-Package-scene-core"
-            name = "scene-core"
-            versionInfo = $Version
-            downloadLocation = "NOASSERTION"
-            licenseConcluded = "NOASSERTION"
-            filesAnalyzed = $false
-        },
-        [ordered]@{
-            SPDXID = "SPDXRef-Package-ffmpeg"
-            name = "ffmpeg"
-            versionInfo = $lock.GetProperty("ffmpegVersion").GetString()
-            downloadLocation = $archive.GetProperty("url").GetString()
-            licenseConcluded = $lock.GetProperty("license").GetProperty("profile").GetString()
-            filesAnalyzed = $false
-        },
-        [ordered]@{
-            SPDXID = "SPDXRef-Package-ffprobe"
-            name = "ffprobe"
-            versionInfo = $lock.GetProperty("ffprobeVersion").GetString()
-            downloadLocation = $source.GetProperty("repository").GetString()
-            licenseConcluded = $lock.GetProperty("license").GetProperty("profile").GetString()
-            filesAnalyzed = $false
+    packages = $spdxPackages.ToArray()
+    relationships = @(
+        foreach ($package in $spdxPackages) {
+            [ordered]@{
+                spdxElementId = "SPDXRef-DOCUMENT"
+                relationshipType = "DESCRIBES"
+                relatedSpdxElement = $package["SPDXID"]
+            }
         }
     )
 }
@@ -261,11 +281,43 @@ $manifestSha = Get-FileSha256 $manifestPath
     "$manifestSha  package-manifest.json`n",
     (New-Object System.Text.UTF8Encoding($false)))
 
+function New-DeterministicZip([string]$SourceDir, [string]$Destination) {
+    if (Test-Path $Destination) { Remove-Item -Force $Destination }
+    $relative = New-Object System.Collections.Generic.List[string]
+    Get-ChildItem -Recurse -File -Path $SourceDir | ForEach-Object {
+        $relative.Add($_.FullName.Substring($SourceDir.Length + 1).Replace("\", "/"))
+    }
+    $ordered = [string[]]$relative.ToArray()
+    [Array]::Sort($ordered, [System.StringComparer]::Ordinal)
+    $timestamp = [System.DateTimeOffset]::Parse("2026-01-01T00:00:00Z")
+    $stream = [System.IO.File]::Open($Destination, [System.IO.FileMode]::CreateNew)
+    try {
+        $archive = New-Object System.IO.Compression.ZipArchive($stream, [System.IO.Compression.ZipArchiveMode]::Create, $true)
+        try {
+            foreach ($entryName in $ordered) {
+                $entry = $archive.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal)
+                $entry.LastWriteTime = $timestamp
+                $entryStream = $entry.Open()
+                try {
+                    $source = [System.IO.File]::OpenRead((Join-Path $SourceDir $entryName))
+                    try { $source.CopyTo($entryStream) } finally { $source.Dispose() }
+                }
+                finally { $entryStream.Dispose() }
+            }
+        }
+        finally { $archive.Dispose() }
+    }
+    finally { $stream.Dispose() }
+}
+
 $zipName = "scene-core-$Version-windows-x86_64.zip"
 $zipPath = Join-Path $OutputDir $zipName
-if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
-Compress-Archive -Path (Join-Path $bundle "*") -DestinationPath $zipPath
+New-DeterministicZip $bundle $zipPath
 $zipSha = Get-FileSha256 $zipPath
+$verifyPath = Join-Path $env:TEMP ("scene-core-zip-verify-" + [System.Guid]::NewGuid().ToString("N") + ".zip")
+New-DeterministicZip $bundle $verifyPath
+if ((Get-FileSha256 $verifyPath) -ne $zipSha) { throw "ZIP output is not reproducible" }
+Remove-Item -Force $verifyPath
 [System.IO.File]::WriteAllText(
     (Join-Path $OutputDir "$zipName.sha256"),
     "$zipSha  $zipName`n",

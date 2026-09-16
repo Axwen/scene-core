@@ -86,6 +86,7 @@ jobs:
         shell: pwsh
         env:
           SCENE_CORE_ENGINE_COMMIT: ${{ github.sha }}
+          RUSTFLAGS: -C target-feature=+crt-static
         run: cargo +1.85.1 build --release --locked -p scene-core-engine
 
       - name: Cache toolchain archives
@@ -98,6 +99,10 @@ jobs:
         shell: pwsh
         run: |
           ./scripts/build-windows-bundle.ps1 -Version $env:SCENE_CORE_ENGINE_VERSION -EngineCommit $env:GITHUB_SHA
+
+      - name: Scan PE imports
+        shell: pwsh
+        run: python scripts/pe-imports.py packaging/bundles/windows-x86_64/bundle
 
       - name: Smoke test bundle
         shell: pwsh

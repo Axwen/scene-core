@@ -41,10 +41,17 @@
 
 验收对照：1、2、4 已满足；3 的 GPL/nonfree（buildconf + flags 校验）、PATH 依赖与管理员权限（干净环境实测）、未记录动态库（白名单组装 + closure hash + 未列文件拒绝）均已有证据。
 
+增量四（2026-09-16，技术尾巴）：
+
+- 新增 `scripts/pe-imports.py`：解析每个 PE 的 import 表。首跑即发现两个真实问题——系统 DLL allowlist 不完整（usp10/ncrypt/bcryptprimitives/d2d1 等），以及 `scene-core.exe` 依赖 `VCRUNTIME140.dll`；engine 改为 `-C target-feature=+crt-static` 构建后不再依赖 VC++ 运行库。
+- ZIP 改为确定性生成（固定时间戳、ordinal 排序、`ZipArchive` + Optimal），打包脚本连打两次比较 SHA-256，不一致即失败。
+- SBOM 细化：除 scene-core/ffmpeg/ffprobe 外，为 7 个 libav* DLL 建立独立 SPDX package，并记录文档级 DESCRIBES 关系。
+- CI 新增 PE import 扫描步骤（打包后、冒烟前）。
+
 未完成：
 
-- 原始 PE import 表扫描；ZIP 字节级可复现；SBOM 细化到 libav* 组件。
 - 许可确认（候选为 LGPL-3.0-or-later，或改为自建 `--disable-version3`）必须在对外分发前完成。
+- engine 改为静态 CRT 后，建议在干净 Windows 上重跑一次 `version`/`doctor` 正向命令留档（命令与 `package-manifest.json.sha256` 会随新构件变化）。
 
 ## 依赖
 
