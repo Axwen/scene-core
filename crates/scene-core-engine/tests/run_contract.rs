@@ -599,6 +599,7 @@ fn deadline_reaps_the_tool_and_exits_124() {
     let _ = std::fs::remove_dir_all(&staging);
 }
 
+#[cfg(unix)]
 #[test]
 fn unwritable_output_reports_resource_limit_without_artifacts() {
     let Ok(bin_dir) = std::env::var(scene_core_media::toolchain::ENV_FFMPEG_DIR) else {
