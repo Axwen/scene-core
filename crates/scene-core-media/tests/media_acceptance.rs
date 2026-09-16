@@ -244,6 +244,24 @@ fn preview_and_hash_performance_smoke() {
         bytes.len()
     );
 
+    let digest = hash_file(&output).expect("hash");
+    let golden = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/media/golden/preview-opening.sha256");
+    if std::env::var_os("UPDATE_MEDIA_GOLDEN").is_some() {
+        std::fs::create_dir_all(golden.parent().expect("parent")).expect("golden dir");
+        std::fs::write(&golden, format!("{digest}\n")).expect("write golden");
+    } else {
+        let expected = std::fs::read_to_string(&golden)
+            .expect("preview golden hash")
+            .trim()
+            .to_owned();
+        assert_eq!(
+            digest.as_str(),
+            expected,
+            "preview bytes drifted; regenerate with UPDATE_MEDIA_GOLDEN=1 if the toolchain changed"
+        );
+    }
+
     let large = dir.join("large.bin");
     std::fs::write(&large, vec![0xAB_u8; 64 * 1024 * 1024]).expect("write large file");
     let started = Instant::now();
