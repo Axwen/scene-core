@@ -251,6 +251,10 @@ $tools = @(
     }
 )
 
+$versionOutput = & (Join-Path $bundle "bin/scene-core.exe") version --json
+if ($LASTEXITCODE -ne 0) { throw "scene-core version --json failed inside the staged bundle" }
+$engineInfo = $versionOutput -join "`n" | ConvertFrom-Json
+
 $manifest = [ordered]@{
     packageManifestVersion = "1"
     name = "scene-core"
@@ -262,11 +266,11 @@ $manifest = [ordered]@{
     capabilitiesRef = "capabilities.json"
     engine = [ordered]@{
         path = "bin/scene-core.exe"
-        version = $Version
-        commit = $EngineCommit
-        engineCacheCompatibilityId = "scene-core-output-v1"
-        supportedProtocolVersions = @("0.1")
-        implementedOperations = @()
+        version = $engineInfo.engineVersion
+        commit = $engineInfo.engineCommit
+        engineCacheCompatibilityId = $engineInfo.engineCacheCompatibilityId
+        supportedProtocolVersions = @($engineInfo.supportedProtocolVersions)
+        implementedOperations = @($engineInfo.implementedOperations)
     }
     tools = $tools
     files = $fileArray
