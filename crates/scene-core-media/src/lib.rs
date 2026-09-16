@@ -5,6 +5,7 @@
 //! through the protocol: callers pass structured requests and receive
 //! structured results.
 
+pub mod probe;
 pub mod process;
 pub mod staging;
 pub mod toolchain;
