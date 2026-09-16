@@ -249,18 +249,22 @@ impl ControlMessage {
     }
 }
 
+/// Framing error for a JSONL line that exceeds [`MAX_CONTROL_LINE_BYTES`].
+/// Shared by the parser and by readers that cap lines while reading.
+pub fn control_line_limit_error(actual_bytes: usize) -> ProtocolError {
+    ProtocolError::invalid_request("control JSONL line exceeds the 1 MiB hard limit")
+        .with_stage("framing")
+        .with_limit_actual(
+            i64::try_from(MAX_CONTROL_LINE_BYTES).expect("fits"),
+            i64::try_from(actual_bytes).unwrap_or(i64::MAX),
+        )
+}
+
 /// Parses one control JSONL line, rejecting BOM, oversized lines and unknown
 /// message types. Semantic validation is separate.
 pub fn parse_control_line(line: &str) -> ProtocolResult<ControlMessage> {
     if line.len() > MAX_CONTROL_LINE_BYTES {
-        return Err(Box::new(
-            ProtocolError::invalid_request("control JSONL line exceeds the 1 MiB hard limit")
-                .with_stage("framing")
-                .with_limit_actual(
-                    i64::try_from(MAX_CONTROL_LINE_BYTES).expect("fits"),
-                    i64::try_from(line.len()).unwrap_or(i64::MAX),
-                ),
-        ));
+        return Err(Box::new(control_line_limit_error(line.len())));
     }
     let probe: MessageTypeProbe = parse_strict_json(line, "control message")?;
     match probe.message_type.as_str() {

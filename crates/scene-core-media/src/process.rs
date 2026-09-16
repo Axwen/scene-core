@@ -75,6 +75,7 @@ impl ProcessOutput {
 pub enum ProcessError {
     Spawn(std::io::Error),
     Wait(std::io::Error),
+    Read(std::io::Error),
 }
 
 impl std::fmt::Display for ProcessError {
@@ -82,6 +83,9 @@ impl std::fmt::Display for ProcessError {
         match self {
             ProcessError::Spawn(error) => write!(formatter, "could not start the tool: {error}"),
             ProcessError::Wait(error) => write!(formatter, "could not wait for the tool: {error}"),
+            ProcessError::Read(error) => {
+                write!(formatter, "could not read the tool output: {error}")
+            }
         }
     }
 }
@@ -131,8 +135,8 @@ pub fn run(spec: &ProcessSpec) -> Result<ProcessOutput, ProcessError> {
         }
     };
 
-    let (stdout, stdout_truncated) = collect_output(stdout_receiver);
-    let (stderr, stderr_truncated) = collect_output(stderr_receiver);
+    let (stdout, stdout_truncated) = collect_output(stdout_receiver).map_err(ProcessError::Read)?;
+    let (stderr, stderr_truncated) = collect_output(stderr_receiver).map_err(ProcessError::Read)?;
     Ok(ProcessOutput {
         success: status.success() && !timed_out && !cancelled,
         exit_code: status.code(),
@@ -145,20 +149,24 @@ pub fn run(spec: &ProcessSpec) -> Result<ProcessOutput, ProcessError> {
     })
 }
 
-fn collect_output(receiver: std::sync::mpsc::Receiver<(Vec<u8>, bool)>) -> (Vec<u8>, bool) {
+type CappedOutput = std::io::Result<(Vec<u8>, bool)>;
+
+fn collect_output(receiver: std::sync::mpsc::Receiver<CappedOutput>) -> CappedOutput {
     match receiver.recv_timeout(Duration::from_secs(2)) {
         Ok(value) => value,
-        Err(_) => (Vec::new(), true),
+        Err(_) => Ok((Vec::new(), true)),
     }
 }
 
-fn read_capped<R: Read>(mut reader: R, limit: usize) -> (Vec<u8>, bool) {
+fn read_capped<R: Read>(mut reader: R, limit: usize) -> CappedOutput {
     let mut buffer = [0_u8; 8192];
     let mut collected = Vec::new();
     let mut truncated = false;
     loop {
         match reader.read(&mut buffer) {
-            Ok(0) | Err(_) => break,
+            Ok(0) => break,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
             Ok(read) => {
                 if collected.len() < limit {
                     let take = (limit - collected.len()).min(read);
@@ -172,5 +180,29 @@ fn read_capped<R: Read>(mut reader: R, limit: usize) -> (Vec<u8>, bool) {
             }
         }
     }
-    (collected, truncated)
+    Ok((collected, truncated))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    struct FailingReader;
+
+    impl Read for FailingReader {
+        fn read(&mut self, _buffer: &mut [u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::other("simulated read failure"))
+        }
+    }
+
+    #[test]
+    fn read_capped_reports_truncation_and_read_errors() {
+        let (bytes, truncated) = read_capped(Cursor::new(b"abcdef".to_vec()), 4).expect("read");
+        assert_eq!(bytes, b"abcd");
+        assert!(truncated);
+
+        let error = read_capped(FailingReader, 4).expect_err("read error must not look like EOF");
+        assert_eq!(error.kind(), std::io::ErrorKind::Other);
+    }
 }

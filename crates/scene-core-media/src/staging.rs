@@ -59,27 +59,57 @@ impl StagingRoot {
 
     pub fn require_input(&self) -> Result<PathBuf, StagingError> {
         let input = self.input();
-        if input.is_file() {
-            Ok(input)
-        } else {
-            Err(StagingError::InputMissing(input))
+        self.reject_symlinks(&input)?;
+        match std::fs::metadata(&input) {
+            Ok(metadata) if metadata.is_file() => Ok(input),
+            _ => Err(StagingError::InputMissing(input)),
         }
     }
 
     pub fn output(&self, reference: &RelativeRef) -> Result<PathBuf, StagingError> {
         let candidate = self.root.join(reference.as_str());
-        let mut ancestor = candidate.clone();
-        while !ancestor.exists() {
-            match ancestor.parent() {
-                Some(parent) => ancestor = parent.to_path_buf(),
-                None => break,
+        self.reject_symlinks(&candidate)?;
+        Ok(candidate)
+    }
+
+    /// Rejects any symlink on the path below the root. `symlink_metadata` does
+    /// not follow the final component, so both a symlinked input and a
+    /// symlinked ancestor directory are caught.
+    fn reject_symlinks(&self, candidate: &Path) -> Result<(), StagingError> {
+        let escape = || StagingError::EscapesRoot(candidate.to_path_buf());
+        let relative = candidate.strip_prefix(&self.root).map_err(|_| escape())?;
+        let mut current = self.root.clone();
+        for component in relative.components() {
+            let std::path::Component::Normal(part) = component else {
+                return Err(escape());
+            };
+            current.push(part);
+            if std::fs::symlink_metadata(&current)
+                .map(|metadata| is_link_or_reparse(&metadata))
+                .unwrap_or(false)
+            {
+                return Err(escape());
             }
         }
-        let canonical = ancestor.canonicalize().map_err(StagingError::Io)?;
-        if !canonical.starts_with(&self.root) {
-            return Err(StagingError::EscapesRoot(candidate));
-        }
-        Ok(candidate)
+        Ok(())
+    }
+}
+
+/// Windows junctions and other reparse points are not `is_symlink()`, so the
+/// file attribute is checked there as well.
+fn is_link_or_reparse(metadata: &std::fs::Metadata) -> bool {
+    if metadata.file_type().is_symlink() {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
+        return metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0;
+    }
+    #[cfg(not(windows))]
+    {
+        false
     }
 }
 
@@ -132,5 +162,53 @@ mod tests {
         ));
         let _ = std::fs::remove_dir_all(root.root());
         let _ = std::fs::remove_dir_all(&outside);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_inputs_are_rejected() {
+        let outside = temp_root("outside-input");
+        std::fs::create_dir_all(&outside).expect("outside dir");
+        let media = outside.join("media.mkv");
+        std::fs::write(&media, b"media").expect("media file");
+
+        let root = StagingRoot::new(temp_root("symlink-input")).expect("staging root");
+        std::fs::create_dir_all(root.root().join("input")).expect("input dir");
+        std::os::unix::fs::symlink(&media, root.input()).expect("symlink");
+        assert!(matches!(
+            root.require_input(),
+            Err(StagingError::EscapesRoot(_))
+        ));
+
+        std::fs::remove_file(root.input()).expect("remove symlink");
+        std::fs::remove_dir(root.root().join("input")).expect("remove input dir");
+        std::os::unix::fs::symlink(&outside, root.root().join("input")).expect("dir symlink");
+        assert!(matches!(
+            root.require_input(),
+            Err(StagingError::EscapesRoot(_))
+        ));
+
+        let _ = std::fs::remove_dir_all(root.root());
+        let _ = std::fs::remove_dir_all(&outside);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn dangling_output_symlinks_are_rejected() {
+        let root = StagingRoot::new(temp_root("dangling")).expect("staging root");
+        let outside = temp_root("dangling-outside");
+        let _ = std::fs::remove_dir_all(&outside);
+        std::fs::create_dir_all(root.root().join("output")).expect("output dir");
+        std::os::unix::fs::symlink(
+            outside.join("missing.jpg"),
+            root.root().join("output/frame.jpg"),
+        )
+        .expect("symlink");
+        let reference = RelativeRef::new("output/frame.jpg").expect("ref");
+        assert!(matches!(
+            root.output(&reference),
+            Err(StagingError::EscapesRoot(_))
+        ));
+        let _ = std::fs::remove_dir_all(root.root());
     }
 }

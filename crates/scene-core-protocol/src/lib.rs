@@ -31,7 +31,7 @@ pub use cli::{
 };
 pub use control::{
     CancelMessageType, CancelRequest, ControlMessage, ControlStreamValidator, DEFAULT_DEADLINE_MS,
-    MAX_DEADLINE_MS, StartMessageType, StartRequest, parse_control_line,
+    MAX_DEADLINE_MS, StartMessageType, StartRequest, control_line_limit_error, parse_control_line,
 };
 pub use error::{ErrorCode, ProtocolError, ProtocolResult, TerminalKind, ValidationError};
 pub use event::{EventEnvelope, EventMessageType, EventStreamValidator, EventType};
