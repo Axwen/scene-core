@@ -49,6 +49,6 @@
 ## 完成定义
 
 - 六个 Ticket 验收通过，`version --json` 如实报告 `implementedOperations: ["probe", "extract_preview"]`。
-- Windows sidecar 在 bundle 内可执行 `run`；Linux CI 用锁定工具链跑合成媒体合同测试。
-- 真实媒体验收记录包含时间偏移、VFR/B 帧、未知原点、损坏媒体与附件图例。
+- Windows sidecar 在 bundle 内可执行 `run`（`bundle-smoke.ps1` 在解压 bundle 内跑 probe/extract_preview）；Linux CI 用锁定工具链跑合成媒体合同测试。
+- 真实媒体验收记录包含时间偏移、VFR/B 帧、未知原点、损坏媒体与附件图例。（部分：一个真实 CFR 样本基线见 `docs/acceptance/real-media-acceptance.md`；异常类真实样本仍由合成覆盖）
 - 失败、取消、超时和 staged 产物不发布、不可缓存（沿用 SC-P0-07 契约）。
