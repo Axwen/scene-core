@@ -46,6 +46,14 @@ jobs:
       - name: Verify toolchain lock
         run: bash scripts/verify-toolchain-lock.sh
 
+      - name: Fetch Linux toolchain
+        run: |
+          bin="$(bash scripts/fetch-toolchain.sh x86_64-unknown-linux-gnu "$RUNNER_TEMP/ffmpeg-linux" | tail -n 1)"
+          printf 'SCENE_CORE_FFMPEG_DIR=%s\n' "$bin" >> "$GITHUB_ENV"
+
+      - name: Run media contract tests
+        run: cargo +1.85.1 test -p scene-core-media --locked
+
   windows:
     name: Windows checks
     runs-on: windows-latest

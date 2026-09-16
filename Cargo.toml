@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/scene-core-media",
     "crates/scene-core-protocol",
     "crates/scene-core-engine",
 ]

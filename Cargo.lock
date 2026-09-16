@@ -122,9 +122,17 @@ dependencies = [
 name = "scene-core-engine"
 version = "0.1.0"
 dependencies = [
+ "scene-core-media",
  "scene-core-protocol",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "scene-core-media"
+version = "0.1.0"
+dependencies = [
+ "scene-core-protocol",
 ]
 
 [[package]]

@@ -17,6 +17,14 @@
 2. 执行层单测覆盖：超时 kill、取消 kill、非零退出、stderr 上限、路径越界拒绝。
 3. `cargo tree` 证明依赖方向为 `engine -> media -> protocol`，protocol/media 均无 FFmpeg argv 或路径暴露。
 
+## 实现状态（2026-09-16）
+
+- 新增 `crates/scene-core-media`（`publish = false`），依赖协议 crate；engine 增加 `engine -> media -> protocol` 依赖边。
+- Linux 工具链 lock：`packaging/toolchains/x86_64-unknown-linux-gnu/toolchain.lock.json`，BtbN `linux64-lgpl-shared` `n9.0.1-31-g3a7c002718`（62,531,572 字节、SHA-256、源码归档与构建脚本 hash、7 个共享库、LGPL-3.0-or-later 见 ADR-0001）。
+- 新增 `scripts/fetch-toolchain.sh <target> <dest>`：校验 size/SHA-256 后解压并输出 bin 目录；Linux CI 用它设置 `SCENE_CORE_FFMPEG_DIR` 并运行 media 合同测试。
+- 执行层：无 shell、绝对路径解析（不查 PATH）、stdout/stderr 上限与截断标记、deadline 与取消 kill、读取线程带收尾超时；staging 容器含 symlink 逃逸拒绝。
+- 验证：本地用提取的 Linux 工具链跑通 7 个 media 测试（`ffprobe -version`、生成并探测合成媒体、缺文件非零退出、超时/取消、输出截断）；`cargo tree` 确认依赖方向；workspace 共 124 tests，clippy 无 allow。
+
 ## 依赖
 
 SC-P0-05、SC-P0-06。

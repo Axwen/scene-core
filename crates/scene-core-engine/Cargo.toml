@@ -10,6 +10,7 @@ name = "scene-core"
 path = "src/main.rs"
 
 [dependencies]
+scene-core-media = { path = "../scene-core-media" }
 scene-core-protocol = { path = "../scene-core-protocol" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"

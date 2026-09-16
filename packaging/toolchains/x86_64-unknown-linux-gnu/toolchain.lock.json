@@ -1,0 +1,70 @@
+{
+  "toolchainLockVersion": "1",
+  "target": "x86_64-unknown-linux-gnu",
+  "distributionProfile": "lgpl",
+  "ffmpegVersion": "n9.0.1-31-g3a7c002718",
+  "ffprobeVersion": "n9.0.1-31-g3a7c002718",
+  "source": {
+    "repository": "https://github.com/FFmpeg/FFmpeg",
+    "tag": "n9.0.1",
+    "commit": "3a7c002718175a86560a4de5af802be87e6f1bcd",
+    "archiveUrl": "https://github.com/FFmpeg/FFmpeg/archive/3a7c002718175a86560a4de5af802be87e6f1bcd.tar.gz",
+    "archiveByteSize": 17326969,
+    "archiveSha256": "sha256:3128a2ed2ee58d2a97db2d5bddae43557624794daa90161544d54657220a3c03"
+  },
+  "build": {
+    "supplier": "BtbN/FFmpeg-Builds",
+    "repository": "https://github.com/BtbN/FFmpeg-Builds",
+    "releaseTag": "autobuild-2026-09-15-13-18",
+    "publishedAt": "2026-09-15T13:19:24Z",
+    "variant": "linux64-lgpl-shared",
+    "variantScripts": [
+      {
+        "path": "variants/linux64-lgpl-shared.sh",
+        "sha256": "sha256:9cbbcae8993953bdf7744ce623c3352030dca1abe40caf93fbf8376ee7c6515e"
+      },
+      {
+        "path": "variants/defaults-lgpl-shared.sh",
+        "sha256": "sha256:4c8c2514f03d5fd5c471449180a8d9a4a79501bf5de50e7579e17df18a6117f2"
+      },
+      {
+        "path": "variants/defaults-lgpl.sh",
+        "sha256": "sha256:34fddfb560691429eb86d44d60a4957b5193b64371c12bc454ee5284f68a2366"
+      }
+    ],
+    "configureFlags": ["--enable-version3", "--disable-debug", "--enable-shared", "--disable-static"],
+    "gplComponents": false,
+    "nonfreeComponents": false
+  },
+  "license": {
+    "profile": "LGPL-3.0-or-later",
+    "reason": "--enable-version3 upgrades FFmpeg's LGPL to version 3",
+    "licenseFile": "LICENSE.txt",
+    "legalReview": "covered by ADR-0001; re-review required before any external distribution"
+  },
+  "archive": {
+    "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-15-13-18/ffmpeg-n9.0.1-31-g3a7c002718-linux64-lgpl-shared-9.0.tar.xz",
+    "byteSize": 62531572,
+    "sha256": "sha256:26eacb93b86f7d48a367b2c192769856e922c24544d720de20471590cdd33e68",
+    "layoutRoot": "ffmpeg-n9.0.1-31-g3a7c002718-linux64-lgpl-shared-9.0",
+    "binaries": {
+      "ffmpeg": "bin/ffmpeg",
+      "ffprobe": "bin/ffprobe"
+    },
+    "sharedLibraries": [
+      "lib/libavcodec.so.63",
+      "lib/libavdevice.so.63",
+      "lib/libavfilter.so.12",
+      "lib/libavformat.so.63",
+      "lib/libavutil.so.61",
+      "lib/libswresample.so.7",
+      "lib/libswscale.so.10"
+    ],
+    "excluded": ["bin/ffplay"],
+    "mirrorPolicy": "if the supplier URL disappears, mirror this exact archive into a scene-core release asset and keep the same sha256"
+  },
+  "requiredVerification": [
+    "Linux CI must verify the archive sha256 and run ffprobe -version plus a minimal -i probe",
+    "The same CI job runs the scene-core-media contract tests against the extracted toolchain"
+  ]
+}
