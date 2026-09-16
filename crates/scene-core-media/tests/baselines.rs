@@ -85,21 +85,26 @@ fn media_baselines() {
     let preview_bytes = std::fs::metadata(&output).expect("metadata").len();
 
     let large = dir.join("large.bin");
+    let large_mib: u64 = std::env::var("SCENE_CORE_BENCH_LARGE_MIB")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(256);
     {
         use std::io::Write as _;
         let mut file = std::fs::File::create(&large).expect("create");
         let chunk = vec![0x5A_u8; 1024 * 1024];
-        for _ in 0..256 {
+        for _ in 0..large_mib {
             file.write_all(&chunk).expect("write chunk");
         }
+        file.sync_all().expect("sync");
     }
     let started = Instant::now();
     let _ = hash_file(&large).expect("hash");
     let elapsed = started.elapsed();
-    let throughput = 256.0 / elapsed.as_secs_f64();
+    let throughput = large_mib as f64 / elapsed.as_secs_f64();
 
     println!(
-        "probe us: p50={} p95={} | preview us: p50={} p95={} | preview bytes: {} | hash MiB/s: {:.0}",
+        "probe us: p50={} p95={} | preview us: p50={} p95={} | preview bytes: {} | hash {large_mib} MiB/s: {:.0}",
         percentile(&mut probe_times, 0.5),
         percentile(&mut probe_times, 0.95),
         percentile(&mut preview_times, 0.5),
