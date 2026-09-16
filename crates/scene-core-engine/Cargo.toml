@@ -1,0 +1,10 @@
+[package]
+name = "scene-core-engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+scene-core-protocol = { path = "../scene-core-protocol" }
+

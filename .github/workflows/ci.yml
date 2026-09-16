@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    name: Linux checks
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.85.1 --profile minimal --component rustfmt --component clippy
+
+      - name: Check formatting
+        run: cargo +1.85.1 fmt --all -- --check
+
+      - name: Check workspace
+        run: cargo +1.85.1 check --workspace --locked
+
+      - name: Run tests
+        run: cargo +1.85.1 test --workspace --locked
+
+      - name: Run Clippy
+        run: cargo +1.85.1 clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Check schema drift preflight
+        run: bash scripts/check-schema-drift.sh
+
+  windows:
+    name: Windows checks
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pinned Rust toolchain
+        shell: pwsh
+        run: rustup toolchain install 1.85.1 --profile minimal --component rustfmt --component clippy
+
+      - name: Check workspace
+        shell: pwsh
+        run: cargo +1.85.1 check --workspace --locked
+
+      - name: Run tests
+        shell: pwsh
+        run: cargo +1.85.1 test --workspace --locked
+
+      - name: Verify Windows bundle entrypoint
+        shell: pwsh
+        run: ./scripts/verify-windows-bundle.ps1
+
