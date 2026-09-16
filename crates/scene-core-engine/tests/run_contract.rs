@@ -2,7 +2,8 @@
 
 use scene_core_engine::identity::engine_identity;
 use scene_core_engine::run::{
-    MediaBackend, MediaFailure, PreviewOutcome, RunControl, run_session, validate_request,
+    ControlSession, MediaBackend, MediaFailure, PreviewOutcome, RunControl, run_session,
+    validate_request,
 };
 use scene_core_media::staging::StagingRoot;
 use scene_core_protocol::{
@@ -313,8 +314,14 @@ fn validation_rejects_a_tampered_fingerprint() {
     request.input_fingerprint = digest(9);
     let staging = std::env::temp_dir().join(format!("scene-core-run-{}", std::process::id()));
     std::fs::create_dir_all(&staging).expect("staging");
-    let error = validate_request(&request, &engine_identity(), &digest(2), &staging)
-        .expect_err("fingerprint mismatch");
+    let error = validate_request(
+        &request,
+        &engine_identity(),
+        &digest(2),
+        &staging,
+        &RunControl::new(),
+    )
+    .expect_err("fingerprint mismatch");
     assert_eq!(error.code, ErrorCode::InvalidRequest);
     let _ = std::fs::remove_dir_all(&staging);
 }
@@ -370,6 +377,88 @@ fn invalid_request_with_identity_reports_failed_event() {
         event.error.as_ref().expect("error").code,
         ErrorCode::InvalidRequest
     );
+    let _ = std::fs::remove_dir_all(&staging);
+}
+
+#[test]
+fn control_session_rejects_a_second_cancel_and_a_foreign_request_id() {
+    let request = request(Operation::Probe);
+    let cancel = serde_json::json!({
+        "engineProtocolVersion": "0.1",
+        "messageType": "cancel",
+        "requestId": "req_01",
+    })
+    .to_string();
+
+    let mut session = ControlSession::new(&request, RunControl::new());
+    let control = session.control().clone();
+    session.handle_line("");
+    session.handle_line(&cancel);
+    assert!(control.violation().is_none());
+    assert!(control.is_cancelled());
+    session.handle_line(&cancel);
+    let violation = control.violation().expect("second cancel is a violation");
+    assert_eq!(violation.code, ErrorCode::InvalidRequest);
+
+    let foreign = serde_json::json!({
+        "engineProtocolVersion": "0.1",
+        "messageType": "cancel",
+        "requestId": "req_other",
+    })
+    .to_string();
+    let mut session = ControlSession::new(&request, RunControl::new());
+    let control = session.control().clone();
+    session.handle_line(&foreign);
+    assert_eq!(
+        control.violation().expect("foreign cancel").code,
+        ErrorCode::InvalidRequest
+    );
+}
+
+#[test]
+fn identity_extras_still_report_a_failed_event() {
+    let request = request(Operation::Probe);
+    let staging =
+        std::env::temp_dir().join(format!("scene-core-run-lenient-{}", std::process::id()));
+    std::fs::create_dir_all(&staging).expect("staging");
+    let mut value = serde_json::to_value(&request).expect("json");
+    value
+        .as_object_mut()
+        .expect("object")
+        .insert("unexpectedField".to_owned(), serde_json::json!(1));
+    let line = serde_json::to_string(&value).expect("serialize");
+    let fingerprint = digest(2).as_str().to_owned();
+    let (exit_code, stdout, _) = run_binary(
+        &["run", "--staging-root", staging.to_str().expect("utf-8")],
+        Some(&line),
+        &[("SCENE_CORE_TOOLCHAIN_FINGERPRINT", &fingerprint)],
+    );
+    assert_eq!(exit_code, 2, "stdout: {stdout}");
+    let event: EventEnvelope = serde_json::from_str(stdout.trim()).expect("failed event JSON");
+    assert_eq!(event.event_type, EventType::Failed);
+    assert_eq!(event.sequence, 1);
+    assert_eq!(event.request_id.as_str(), "req_01");
+    assert_eq!(event.source_version_id.as_str(), "sourcev_01");
+    assert_eq!(
+        event.error.as_ref().expect("error").code,
+        ErrorCode::InvalidRequest
+    );
+    let _ = std::fs::remove_dir_all(&staging);
+}
+
+#[test]
+fn oversized_first_line_is_rejected_without_buffering_it() {
+    let staging = std::env::temp_dir().join(format!("scene-core-run-big-{}", std::process::id()));
+    std::fs::create_dir_all(&staging).expect("staging");
+    let line = format!("{{\"padding\":\"{}\"}}", "a".repeat(1024 * 1024 + 16));
+    let (exit_code, stdout, stderr) = run_binary(
+        &["run", "--staging-root", staging.to_str().expect("utf-8")],
+        Some(&line),
+        &[],
+    );
+    assert_eq!(exit_code, 2);
+    assert!(stdout.is_empty());
+    assert!(stderr.contains("hard limit"), "stderr: {stderr}");
     let _ = std::fs::remove_dir_all(&staging);
 }
 

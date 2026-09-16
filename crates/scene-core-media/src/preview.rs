@@ -41,28 +41,26 @@ impl std::fmt::Display for PreviewError {
 
 impl std::error::Error for PreviewError {}
 
-/// Writes one JPEG frame for `requested_time_ms` material time. `origin_ms` is
-/// the container presentation origin in file time; when unknown the decoder
-/// starts at the file start and the caller keeps the actual time null.
+/// Writes one JPEG frame for `requested_time_ms` material time, that is time
+/// relative to the container presentation origin. Input-side `-ss` is the
+/// right coordinate system for that: without `-seek_timestamp` FFmpeg offsets
+/// the argument by the input start time itself, so adding the origin here
+/// would seek twice as far.
 pub fn generate(
     toolchain: &Toolchain,
     input: &Path,
-    origin_ms: Option<i64>,
     requested_time_ms: u64,
     output: &Path,
     cancellation: Option<Arc<AtomicBool>>,
 ) -> Result<(), PreviewError> {
-    let seek_ms = origin_ms.map(|origin| origin + requested_time_ms as i64);
     let mut args: Vec<String> = vec![
         "-hide_banner".to_owned(),
         "-loglevel".to_owned(),
         "error".to_owned(),
         "-nostdin".to_owned(),
+        "-ss".to_owned(),
+        format_seconds(i64::try_from(requested_time_ms).unwrap_or(i64::MAX)),
     ];
-    if let Some(seek_ms) = seek_ms {
-        args.push("-ss".to_owned());
-        args.push(format_seconds(seek_ms));
-    }
     args.extend([
         "-i".to_owned(),
         input.to_string_lossy().into_owned(),
@@ -84,6 +82,7 @@ pub fn generate(
     let result = run(&spec).map_err(|error| match error {
         ProcessError::Spawn(_) => PreviewError::ToolUnavailable,
         ProcessError::Wait(_) => PreviewError::EngineInternal("ffmpeg wait failed"),
+        ProcessError::Read(_) => PreviewError::EngineInternal("ffmpeg output could not be read"),
     })?;
     if result.cancelled {
         return Err(PreviewError::Cancelled);

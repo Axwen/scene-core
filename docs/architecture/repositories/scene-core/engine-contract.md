@@ -7,8 +7,10 @@
 ## 1. 传输与边界
 
 - 一条 Host 请求进入 stdin 或等价的受控进程通道；事件逐条写 stdout 并 flush。
-- 媒体和 Artifact 字节不内嵌 JSON，由 Host 管理私有 staging。
+- 媒体和 Artifact 字节不内嵌 JSON，由 Host 管理私有 staging。staging 内不得出现指向根外的符号链接/reparse：`input/source.media` 及其父目录、Artifact 路径的任一层是符号链接时按 `INPUT_NOT_FOUND` 受控失败，不跟随链接读取。
+- 请求的单行 JSONL 有 1 MiB 硬上限；读取阶段即按上限截断，超限行按 framing 错误处理，不会先整行分配再校验。
 - stderr 只用于受控诊断，不是稳定协议；不得输出绝对路径、完整 argv、原始 FFmpeg stderr、媒体内容或凭据。
+- 事件流是契约的一部分：终态事件无法写入 stdout（调用方提前关闭管道等）时进程以非零退出码结束，不得按成功结束。
 - Core 不连接业务数据库、对象存储、缓存数据库或权限系统；HTTP/gRPC、Tauri 和桌面安装包不属于 Core 0.1。
 
 ## 2. StartRequest
@@ -92,6 +94,8 @@ Boot -> Accepted -> Running -> Completed | Failed | Cancelled | TimedOut
 ## 7. Manifest 与 Artifact
 
 Manifest 只描述引擎产出，不承担存储归属。每个 Artifact 使用 `relativeRef`、`byteSize`、`contentHash` 和适用时的时间字段；时间区间必须满足 `startMs >= 0`、`endMs > startMs`。单帧只记录请求时间和可选 presentation time，不伪造区间。
+
+`extract_preview` 的请求时间与 `requestedTimeMs` 都是素材时间，即相对容器展示原点 O 的时间；解码定位使用同一坐标系（FFmpeg 输入侧 `-ss` 在默认 `-seek_timestamp 0` 下已按输入起点偏移，调用方不得再加 O）。`presentationTimeMs` 未知时为 `null`，不得用请求时间顶替。
 
 只有 completed + exit 0 + Manifest/文件/Hash 校验通过并由 Host 原子 finalize 的完整集合可注册或缓存。staged、失败、取消、超时、崩溃或未完成产物不得发布、索引或成为缓存命中源。缓存键、cacheScope 隔离与命中规则见 [Host 集成与缓存契约](../../../specs/host-cache-contract.md)。
 

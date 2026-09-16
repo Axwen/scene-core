@@ -21,10 +21,19 @@ def digest(text):
     return "sha256:" + hashlib.sha256(text.encode()).hexdigest()
 
 
+def hash_file(path):
+    """Streams the file so large media never has to fit in memory."""
+    hasher = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    return "sha256:" + hasher.hexdigest()
+
+
 def main():
     operation, media, fingerprint = sys.argv[1], sys.argv[2], sys.argv[3]
     size = os.path.getsize(media)
-    content = "sha256:" + hashlib.sha256(open(media, "rb").read()).hexdigest()
+    content = hash_file(media)
     input_fingerprint = digest(canonical({
         "inputSetVersion": "1",
         "inputs": [{"role": "source_media", "contentHash": content, "byteSize": size}],

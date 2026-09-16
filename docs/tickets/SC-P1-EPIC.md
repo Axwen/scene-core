@@ -39,12 +39,29 @@
 
 聚合：main 最近 run 全绿、失败 run 清零；`version --json` 如实报告 `implementedOperations: [probe, extract_preview]`。
 
+### 结项后审查修复（2026-09-16）
+
+对 `be22f9d` 的完整交付做了一轮 Standards/Spec 审查，确认并修复以下缺陷；每条都补了可运行检查（`cargo test --workspace` 全绿）：
+
+| 类别 | 缺陷 | 修复 | 证据 |
+|---|---|---|---|
+| Spec P1 | staging 输入用 `is_file()` 跟随符号链接越界 | 逐层 `symlink_metadata` 拒绝符号链接（输入与输出路径） | `staging.rs` 三个符号链接用例（输入文件、输入目录、悬空输出） |
+| Spec P1 | 非零原点预览定位把 origin 重复相加 | 按素材时间定位（去掉 origin 加项） | `preview_contract::nonzero_origin_previews_seek_by_material_time`；真实 TS 端到端与 `-seek_timestamp 1` 参考帧逐字节一致 |
+| Spec P1 | 输入 hash 不受取消/deadline 约束 | 计时与取消线程提前到校验之前，hash 按块观察取消 | `hash::cancellation_stops_hashing`；`accepted`+`cancelled`/`timedOut` 终态 |
+| Spec P2 | 身份完整的非法请求缺 `failed` 事件 | 宽松回显改用非严格解析，允许未知字段 | `identity_extras_still_report_a_failed_event` |
+| Spec P2 | 重复 CancelRequest 未按协议错误拒绝 | 复用 `ControlStreamValidator` 统一控制流规则 | `control_session_rejects_a_second_cancel_and_a_foreign_request_id` |
+| Spec P2 | 1 MiB 行限制在整行分配之后 | 读取阶段按上限截断，超限行按 framing 错误 | `cli::tests::capped_lines_*`、`oversized_first_line_is_rejected_without_buffering_it` |
+| Standards P2 | 工具输出读取错误被当作 EOF | `read_capped` 显式返回 I/O 错误并向上映射 | `process::tests::read_capped_reports_truncation_and_read_errors` |
+| Standards P2 | 事件写入/flush 错误被忽略 | 交付失败时以非零退出码结束 | `emit_events` 记录写失败并返回 `ENGINE_INTERNAL` |
+| Standards P2 | 请求生成脚本整读媒体 | 分块流式 hash | `scripts/make-run-request.py` |
+| 额外（TS 探测） | MPEG-TS 的 `coded_width: 0` 被当成零尺寸流，导致 probe `ENGINE_INTERNAL` | `0` 视为未知；尺寸/采样率/声道只保留正值 | `zero_coded_dimensions_from_mpegts_are_unknown`；真实 TS probe + extract_preview 端到端通过 |
+
 ### 仍然开放（不阻塞 Phase 1 结项）
 
-1. 真实/公开脱敏样本、预览期望图与播放器点击对照（需要真实素材与人工操作）。
+1. ~~真实/公开脱敏样本、预览期望图与播放器点击对照~~ 已完成，见 [manual-verification.md](../../acceptance/manual-verification.md) 与 [real-media-acceptance.md](../../acceptance/real-media-acceptance.md)。
 2. 并发/多请求下的峰值内存与磁盘配额（单请求 20 GiB 已实测：567 MiB/s、峰值 152 MiB）。
-3. 聚焦 Eng Review：建议由用户按既有审查流程基于本表证据执行。
-4. Windows sidecar 内的 `run` 端到端实测（当前 bundle 只冒烟 version/doctor）。
+3. 聚焦 Eng Review：本轮审查发现已修复并留证，结论待用户按既有流程复核。
+4. ~~Windows sidecar 内的 `run` 端到端实测~~ 已在干净 Windows 上以 bundle artifact 跑通 probe/extract_preview 与负向矩阵。
 
 ## 完成定义
 

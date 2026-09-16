@@ -132,7 +132,9 @@ struct SideData {
     rotation: Option<f64>,
 }
 
-/// Normalized media plus the container origin in file time, needed to seek.
+/// Normalized media plus the raw container origin in file time. The origin is
+/// informational: seeking and the DTO both work in material time relative to
+/// it, so callers do not have to add it back.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProbeOutcome {
     pub media: NormalizedMedia,
@@ -175,6 +177,11 @@ pub fn probe_with_cancel(
         Err(ProcessError::Spawn(_)) => return Err(ProbeError::ToolUnavailable),
         Err(ProcessError::Wait(_)) => {
             return Err(ProbeError::EngineInternal("ffprobe wait failed"));
+        }
+        Err(ProcessError::Read(_)) => {
+            return Err(ProbeError::EngineInternal(
+                "ffprobe output could not be read",
+            ));
         }
     };
     if output.cancelled {
@@ -292,17 +299,25 @@ fn normalize(parsed: &FfprobeOutput, input: &Path) -> Result<ProbeOutcome, Probe
             default_disposition,
             attached_picture,
             coded_width: if is_video {
-                stream.coded_width.or(stream.width)
+                positive(stream.coded_width).or_else(|| positive(stream.width))
             } else {
                 None
             },
             coded_height: if is_video {
-                stream.coded_height.or(stream.height)
+                positive(stream.coded_height).or_else(|| positive(stream.height))
             } else {
                 None
             },
-            display_width: if is_video { stream.width } else { None },
-            display_height: if is_video { stream.height } else { None },
+            display_width: if is_video {
+                positive(stream.width)
+            } else {
+                None
+            },
+            display_height: if is_video {
+                positive(stream.height)
+            } else {
+                None
+            },
             rotation_degrees,
             average_frame_rate: if is_video {
                 stream
@@ -314,11 +329,15 @@ fn normalize(parsed: &FfprobeOutput, input: &Path) -> Result<ProbeOutcome, Probe
                 None
             },
             sample_rate: if is_audio {
-                parse_u32(stream.sample_rate.as_deref())
+                parse_u32(stream.sample_rate.as_deref()).filter(|rate| *rate > 0)
             } else {
                 None
             },
-            channels: if is_audio { stream.channels } else { None },
+            channels: if is_audio {
+                stream.channels.filter(|channels| *channels > 0)
+            } else {
+                None
+            },
             channel_layout: if is_audio {
                 stream
                     .channel_layout
@@ -440,6 +459,13 @@ fn parse_u32(value: Option<&str>) -> Option<u32> {
     value.and_then(|value| value.trim().parse().ok())
 }
 
+/// ffprobe reports `0` for dimensions a container does not carry (MPEG-TS
+/// often reports `coded_width: 0`); the DTO treats that as unknown, not as a
+/// zero-sized stream.
+fn positive(value: Option<u32>) -> Option<u32> {
+    value.filter(|number| *number > 0)
+}
+
 fn duration_ms(value: &str) -> Result<Option<u64>, ProbeError> {
     let Some(seconds) = optional_seconds(value)? else {
         return Ok(None);
@@ -500,6 +526,21 @@ mod tests {
         assert_eq!(media.container.start_time_ms, None);
         assert_eq!(media.streams[0].start_time_ms, None);
         assert_eq!(media.container.duration_ms, None);
+    }
+
+    #[test]
+    fn zero_coded_dimensions_from_mpegts_are_unknown() {
+        let value = r#"{ "format": { "format_name": "mpegts", "start_time": "1.440000", "duration": "6.000000" },
+             "streams": [ { "index": 0, "codec_name": "mpeg2video", "codec_type": "video",
+                            "start_time": "1.440000", "duration": "6.000000",
+                            "coded_width": 0, "coded_height": 0, "width": 320, "height": 240,
+                            "avg_frame_rate": "25/1", "time_base": "1/90000" } ] }"#;
+        let media = normalize_json(value).expect("normalizes");
+        assert_eq!(media.streams[0].coded_width, Some(320));
+        assert_eq!(media.streams[0].coded_height, Some(240));
+        assert_eq!(media.streams[0].display_width, Some(320));
+        assert_eq!(media.container.start_time_ms, Some(0));
+        assert_eq!(media.streams[0].start_time_ms, Some(0));
     }
 
     #[test]

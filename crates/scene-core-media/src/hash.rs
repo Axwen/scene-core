@@ -5,13 +5,28 @@ use sha2::{Digest as _, Sha256};
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Streams `path` through SHA-256 without loading it into memory.
 pub fn hash_file(path: &Path) -> io::Result<Sha256Digest> {
+    Ok(hash_file_cancellable(path, None)?.expect("no cancellation flag was passed"))
+}
+
+/// Same as [`hash_file`], but observes `cancelled` between chunks. `Ok(None)`
+/// means the flag was set and the digest is incomplete.
+pub fn hash_file_cancellable(
+    path: &Path,
+    cancelled: Option<&AtomicBool>,
+) -> io::Result<Option<Sha256Digest>> {
     let mut file = File::open(path)?;
     let mut hasher = Sha256::new();
     let mut buffer = vec![0_u8; 1024 * 1024];
     loop {
+        if let Some(flag) = cancelled {
+            if flag.load(Ordering::Relaxed) {
+                return Ok(None);
+            }
+        }
         let read = file.read(&mut buffer)?;
         if read == 0 {
             break;
@@ -24,12 +39,34 @@ pub fn hash_file(path: &Path) -> io::Result<Sha256Digest> {
         use std::fmt::Write as _;
         let _ = write!(hex, "{byte:02x}");
     }
-    Ok(Sha256Digest::new(format!("sha256:{hex}")).expect("digest is well-formed"))
+    Ok(Some(
+        Sha256Digest::new(format!("sha256:{hex}")).expect("digest is well-formed"),
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cancellation_stops_hashing() {
+        let path =
+            std::env::temp_dir().join(format!("scene-core-hash-cancel-{}", std::process::id()));
+        std::fs::write(&path, vec![3_u8; 2 * 1024 * 1024]).expect("write");
+        let cancelled = AtomicBool::new(true);
+        assert!(
+            hash_file_cancellable(&path, Some(&cancelled))
+                .expect("hash")
+                .is_none()
+        );
+        let running = AtomicBool::new(false);
+        assert!(
+            hash_file_cancellable(&path, Some(&running))
+                .expect("hash")
+                .is_some()
+        );
+        let _ = std::fs::remove_file(&path);
+    }
 
     #[test]
     fn hashes_match_the_in_memory_reference() {

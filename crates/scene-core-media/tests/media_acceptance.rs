@@ -232,7 +232,7 @@ fn preview_and_hash_performance_smoke() {
 
     let started = Instant::now();
     let output = dir.join("opening.jpg");
-    generate(&toolchain, &media, Some(0), 0, &output, None).expect("preview");
+    generate(&toolchain, &media, 0, &output, None).expect("preview");
     let preview_ms = started.elapsed().as_millis();
     let bytes = std::fs::read(&output).expect("read");
     let (width, height) = jpeg_dimensions(&bytes).expect("dims");

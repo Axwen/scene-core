@@ -4,10 +4,11 @@ use crate::doctor::{DoctorRequest, run_doctor};
 use crate::identity::{engine_identity, read_toolchain_identity, resolve_bundle_root};
 use crate::run::{self, ProbeBackend, RunControl};
 use crate::runner::RealCommandRunner;
+use scene_core_media::staging::StagingRoot;
 use scene_core_media::toolchain::Toolchain;
 use scene_core_protocol::{
-    CliErrorOutput, ControlMessage, ErrorCode, EventEnvelope, EventType, Identifier, Operation,
-    ProtocolError, ProtocolVersion, Sha256Digest, StartRequest, VersionOutput, parse_control_line,
+    CliErrorOutput, ErrorCode, EventEnvelope, EventType, Identifier, MAX_CONTROL_LINE_BYTES,
+    Operation, ProtocolError, ProtocolVersion, Sha256Digest, StartRequest, VersionOutput,
 };
 use std::io::{BufRead, Write};
 use std::path::PathBuf;
@@ -124,24 +125,21 @@ fn run_run_command(args: &[String]) -> Result<CliOutput, CliErrorOutput> {
 
     let engine = engine_identity();
 
-    let stdin = std::io::stdin();
-    let first = {
-        let mut lines = stdin.lock().lines();
-        match lines.next() {
-            Some(Ok(line)) => line,
-            Some(Err(_)) => {
-                return Ok(CliOutput {
-                    json: String::new(),
-                    exit_code: 2,
-                });
-            }
-            None => {
-                eprintln!("scene-core run: no StartRequest on stdin");
-                return Ok(CliOutput {
-                    json: String::new(),
-                    exit_code: 2,
-                });
-            }
+    let first = match read_first_line() {
+        Ok(Some(line)) => line,
+        Ok(None) => {
+            eprintln!("scene-core run: no StartRequest on stdin");
+            return Ok(CliOutput {
+                json: String::new(),
+                exit_code: 2,
+            });
+        }
+        Err(message) => {
+            eprintln!("scene-core run: {message}");
+            return Ok(CliOutput {
+                json: String::new(),
+                exit_code: 2,
+            });
         }
     };
 
@@ -172,48 +170,26 @@ fn run_run_command(args: &[String]) -> Result<CliOutput, CliErrorOutput> {
     };
 
     let toolchain_fingerprint = resolve_toolchain_fingerprint()?;
-    let verified =
-        match run::validate_request(&request, &engine, &toolchain_fingerprint, &staging_root) {
-            Ok(verified) => verified,
-            Err(error) => {
-                let echo = run::Echo::from_request(&request);
-                let exit_code = emit_events(|emit| {
-                    emit_failed(&echo, &engine, *error, emit);
-                    2
-                });
-                return Ok(CliOutput {
-                    json: String::new(),
-                    exit_code,
-                });
-            }
-        };
 
-    let control = RunControl::new();
-    {
-        let expected = request.request_id.clone();
-        let control = control.clone();
-        std::thread::spawn(move || {
-            let stdin = std::io::stdin();
-            for line in stdin.lock().lines() {
-                let Ok(line) = line else { break };
-                if line.trim().is_empty() {
-                    continue;
-                }
-                match parse_control_line(&line) {
-                    Ok(ControlMessage::Cancel(cancel)) if cancel.request_id == expected => {
-                        control.request_cancel();
-                    }
-                    Ok(_) => control.record_violation(
-                        ProtocolError::invalid_request(
-                            "only one StartRequest and one matching CancelRequest are allowed",
-                        )
-                        .with_stage("framing"),
-                    ),
-                    Err(error) => control.record_violation(*error),
-                }
+    // Cancellation, the deadline and protocol violations are live from here on,
+    // so the staged-input hash in validation is covered by the request deadline
+    // and can be interrupted.
+    let mut session = run::ControlSession::new(&request, RunControl::new());
+    let control = session.control().clone();
+    std::thread::spawn(move || {
+        let stdin = std::io::stdin();
+        let mut lines = CappedLines::new(stdin.lock(), MAX_CONTROL_LINE_BYTES);
+        loop {
+            match lines.next_line() {
+                Ok(Some(line)) if line.oversized => session
+                    .control()
+                    .record_violation(scene_core_protocol::control_line_limit_error(line.bytes)),
+                Ok(Some(line)) => session.handle_line(&line.text),
+                Ok(None) => break,
+                Err(_) => break,
             }
-        });
-    }
+        }
+    });
     {
         let control = control.clone();
         let deadline = Duration::from_millis(request.effective_deadline_ms());
@@ -228,8 +204,16 @@ fn run_run_command(args: &[String]) -> Result<CliOutput, CliErrorOutput> {
         Ok(toolchain) => Box::new(ProbeBackend { toolchain }),
         Err(_) => Box::new(run::UnavailableBackend),
     };
-    let exit_code = emit_events(|emit| {
-        run::run_session(
+    let validation = run::validate_request(
+        &request,
+        &engine,
+        &fingerprint_for_session,
+        &staging_root,
+        &control,
+    );
+    let echo = run::Echo::from_request(&request);
+    let exit_code = emit_events(|emit| match validation {
+        Ok(verified) => run::run_session(
             &request,
             &engine,
             &fingerprint_for_session,
@@ -237,7 +221,30 @@ fn run_run_command(args: &[String]) -> Result<CliOutput, CliErrorOutput> {
             &verified.staging,
             &control,
             emit,
-        )
+        ),
+        // Interrupted while hashing the staged input: the session still emits
+        // `accepted` followed by the cancelled or timed-out terminal event.
+        Err(error) if error.code == ErrorCode::Cancelled => match StagingRoot::new(&staging_root) {
+            Ok(staging) => run::run_session(
+                &request,
+                &engine,
+                &fingerprint_for_session,
+                &run::UnavailableBackend,
+                &staging,
+                &control,
+                emit,
+            ),
+            Err(_) => {
+                let exit_code = error.code.exit_code();
+                emit_failed(&echo, &engine, *error, emit);
+                exit_code
+            }
+        },
+        Err(error) => {
+            let exit_code = error.code.exit_code();
+            emit_failed(&echo, &engine, *error, emit);
+            exit_code
+        }
     });
     Ok(CliOutput {
         json: String::new(),
@@ -245,15 +252,96 @@ fn run_run_command(args: &[String]) -> Result<CliOutput, CliErrorOutput> {
     })
 }
 
+/// Reads the first stdin line with the JSONL line cap applied.
+fn read_first_line() -> Result<Option<String>, String> {
+    let stdin = std::io::stdin();
+    let mut lines = CappedLines::new(stdin.lock(), MAX_CONTROL_LINE_BYTES);
+    match lines.next_line() {
+        Ok(Some(line)) if line.oversized => Err(format!(
+            "the StartRequest line exceeds the {} byte hard limit",
+            MAX_CONTROL_LINE_BYTES
+        )),
+        Ok(Some(line)) => Ok(Some(line.text)),
+        Ok(None) => Ok(None),
+        Err(error) => Err(format!("stdin could not be read: {error}")),
+    }
+}
+
+/// One JSONL line read under a hard byte cap.
+struct CappedLine {
+    text: String,
+    bytes: usize,
+    oversized: bool,
+}
+
+/// JSONL reader that never buffers more than `cap` bytes of one line; the rest
+/// of an oversized line is consumed and discarded.
+struct CappedLines<R> {
+    reader: R,
+    cap: usize,
+}
+
+impl<R: BufRead> CappedLines<R> {
+    fn new(reader: R, cap: usize) -> Self {
+        Self { reader, cap }
+    }
+
+    fn next_line(&mut self) -> std::io::Result<Option<CappedLine>> {
+        let mut collected: Vec<u8> = Vec::new();
+        let mut bytes = 0_usize;
+        let mut saw_input = false;
+        let mut finished = false;
+        while !finished {
+            let available = self.reader.fill_buf()?;
+            if available.is_empty() {
+                break;
+            }
+            saw_input = true;
+            let newline = available.iter().position(|byte| *byte == b'\n');
+            let (content, consume) = match newline {
+                Some(index) => {
+                    finished = true;
+                    (index, index + 1)
+                }
+                None => (available.len(), available.len()),
+            };
+            bytes += content;
+            let space = self.cap.saturating_sub(collected.len());
+            collected.extend_from_slice(&available[..space.min(content)]);
+            self.reader.consume(consume);
+        }
+        if !saw_input {
+            return Ok(None);
+        }
+        Ok(Some(CappedLine {
+            text: String::from_utf8_lossy(&collected).into_owned(),
+            bytes,
+            oversized: bytes > self.cap,
+        }))
+    }
+}
+
 fn emit_events(action: impl FnOnce(&mut dyn FnMut(EventEnvelope)) -> u8) -> u8 {
     let stdout = std::io::stdout();
+    let undelivered = std::cell::Cell::new(false);
     let mut emit = |event: EventEnvelope| {
         let line = serde_json::to_string(&event).expect("event serializes");
-        let mut handle = stdout.lock();
-        let _ = writeln!(handle, "{line}");
-        let _ = handle.flush();
+        let written = {
+            let mut handle = stdout.lock();
+            writeln!(handle, "{line}").and_then(|()| handle.flush())
+        };
+        if written.is_err() {
+            undelivered.set(true);
+        }
     };
-    action(&mut emit)
+    let exit_code = action(&mut emit);
+    if undelivered.get() {
+        // The event stream is the contract; a run whose terminal event could
+        // not be delivered must not report success.
+        ErrorCode::EngineInternal.exit_code()
+    } else {
+        exit_code
+    }
 }
 
 fn emit_failed(
@@ -272,8 +360,11 @@ struct LenientEcho {
     version_supported: bool,
 }
 
+/// Best-effort identity recovery for a StartRequest that failed the strict
+/// parse. It deliberately accepts a superset of the schema: the point is to
+/// echo the identity of a request that carries unknown or invalid extras.
 #[derive(serde::Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 struct LenientRequest {
     engine_protocol_version: ProtocolVersion,
     request_id: Identifier,
@@ -383,5 +474,43 @@ fn serialize<T: serde::Serialize>(value: T, exit_code: u8) -> CliOutput {
     CliOutput {
         json: serde_json::to_string(&value).expect("CLI output serializes"),
         exit_code,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    fn lines(input: &str, cap: usize) -> Vec<CappedLine> {
+        let mut reader = CappedLines::new(Cursor::new(input.as_bytes().to_vec()), cap);
+        let mut read = Vec::new();
+        while let Some(line) = reader.next_line().expect("read line") {
+            read.push(line);
+        }
+        read
+    }
+
+    #[test]
+    fn capped_lines_split_lines_and_flag_oversized_ones() {
+        let read = lines("one\n\ntwo", 16);
+        assert_eq!(read.len(), 3);
+        assert_eq!(read[0].text, "one");
+        assert!(!read[0].oversized);
+        assert_eq!(read[1].text, "");
+        assert_eq!(read[2].text, "two");
+        assert!(!read[2].oversized);
+
+        let read = lines("0123456789\nshort\n", 5);
+        assert_eq!(read[0].bytes, 10);
+        assert!(read[0].oversized);
+        assert_eq!(read[0].text, "01234");
+        assert_eq!(read[1].text, "short");
+        assert!(!read[1].oversized);
+    }
+
+    #[test]
+    fn capped_lines_stop_at_eof() {
+        assert!(lines("", 16).is_empty());
     }
 }

@@ -1,17 +1,18 @@
 //! Host-facing `run` session: validation, event sequence, terminal state and
 //! exit codes. Media work is injected through [`MediaBackend`].
 
-use scene_core_media::hash::hash_file;
+use scene_core_media::hash::{hash_file, hash_file_cancellable};
 use scene_core_media::preview::{self, PreviewError};
 use scene_core_media::probe::{ProbeError, probe_with_cancel};
 use scene_core_media::staging::StagingRoot;
 use scene_core_media::toolchain::Toolchain;
 use scene_core_protocol::{
-    Artifact, ArtifactKind, ArtifactManifest, ArtifactRole, DerivationIdentity, EngineIdentity,
-    ErrorCode, EventEnvelope, EventMessageType, EventType, ExecutionContext, ExtractPreviewResult,
-    Identifier, MediaType, NormalizedMedia, Operation, OperationResult, ProbeResult, ProtocolError,
-    ProtocolVersion, RelativeRef, ResourceUsage, Sha256Digest, StageName, StagedSourceFacts,
-    StartRequest, UtcTimestamp, verify_staged_source,
+    Artifact, ArtifactKind, ArtifactManifest, ArtifactRole, ControlMessage, ControlStreamValidator,
+    DerivationIdentity, EngineIdentity, ErrorCode, EventEnvelope, EventMessageType, EventType,
+    ExecutionContext, ExtractPreviewResult, Identifier, MediaType, NormalizedMedia, Operation,
+    OperationResult, ProbeResult, ProtocolError, ProtocolVersion, RelativeRef, ResourceUsage,
+    Sha256Digest, StageName, StagedSourceFacts, StartRequest, UtcTimestamp, parse_control_line,
+    verify_staged_source,
 };
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -61,6 +62,51 @@ impl RunControl {
 
     pub fn process_flag(&self) -> Arc<AtomicBool> {
         self.cancelled.clone()
+    }
+
+    pub fn cancelled_flag(&self) -> &AtomicBool {
+        &self.cancelled
+    }
+}
+
+/// Reads control JSONL and applies the protocol rules to it: the first line is
+/// the only StartRequest, at most one matching CancelRequest follows, and any
+/// other message is a framing violation. Blank lines are ignored.
+pub struct ControlSession {
+    validator: ControlStreamValidator,
+    control: RunControl,
+}
+
+impl ControlSession {
+    pub fn new(request: &StartRequest, control: RunControl) -> Self {
+        let mut validator = ControlStreamValidator::new();
+        validator
+            .accept(&ControlMessage::Start(Box::new(request.clone())))
+            .expect("a freshly parsed StartRequest is accepted");
+        Self { validator, control }
+    }
+
+    pub fn control(&self) -> &RunControl {
+        &self.control
+    }
+
+    pub fn handle_line(&mut self, line: &str) {
+        if line.trim().is_empty() {
+            return;
+        }
+        match parse_control_line(line) {
+            Ok(message) => match self.validator.accept(&message) {
+                Ok(()) => {
+                    if self.validator.is_cancelled() {
+                        self.control.request_cancel();
+                    }
+                }
+                Err(error) => self.control.record_violation(
+                    ProtocolError::invalid_request(error.to_string()).with_stage("framing"),
+                ),
+            },
+            Err(error) => self.control.record_violation(*error),
+        }
     }
 }
 
@@ -197,7 +243,6 @@ impl MediaBackend for ProbeBackend {
             preview::generate(
                 &self.toolchain,
                 &input,
-                probed.origin_ms,
                 requested_time_ms,
                 &temporary,
                 Some(control.process_flag()),
@@ -302,6 +347,7 @@ pub fn validate_request(
     engine_identity: &EngineIdentity,
     toolchain_fingerprint: &Sha256Digest,
     staging_root: &Path,
+    control: &RunControl,
 ) -> Result<VerifiedInput, Box<ProtocolError>> {
     request.validate()?;
     request.validate_derivation(&DerivationIdentity {
@@ -337,14 +383,20 @@ pub fn validate_request(
             "inputs must contain source_media",
         ))
     })?;
-    let facts = StagedSourceFacts {
-        byte_size: std::fs::metadata(&input).map(|m| m.len()).unwrap_or(0),
-        content_hash: hash_file(&input).map_err(|_| {
-            Box::new(
+    let byte_size = std::fs::metadata(&input).map(|m| m.len()).unwrap_or(0);
+    let content_hash = match hash_file_cancellable(&input, Some(control.cancelled_flag())) {
+        Ok(Some(digest)) => digest,
+        Ok(None) => return Err(Box::new(cancelled_error())),
+        Err(_) => {
+            return Err(Box::new(
                 ProtocolError::new(ErrorCode::InputNotFound, "the staged input is unreadable")
                     .with_stage("staging"),
-            )
-        })?,
+            ));
+        }
+    };
+    let facts = StagedSourceFacts {
+        byte_size,
+        content_hash,
     };
     verify_staged_source(declared, Some(&facts))?;
     Ok(VerifiedInput { staging })
