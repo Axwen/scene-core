@@ -647,7 +647,6 @@ fn unwritable_output_reports_resource_limit_without_artifacts() {
     let _ = std::fs::remove_dir_all(&staging);
 }
 
-#[cfg(unix)]
 #[test]
 fn missing_toolchain_still_reports_accepted_then_failed() {
     let staging =
@@ -660,7 +659,7 @@ fn missing_toolchain_still_reports_accepted_then_failed() {
     let fingerprint = digest(2).as_str().to_owned();
     let empty_dir = staging.join("empty-bin");
     std::fs::create_dir_all(&empty_dir).expect("empty bin");
-    let (exit_code, stdout, _) = run_binary(
+    let (exit_code, stdout, stderr) = run_binary(
         &["run", "--staging-root", staging.to_str().expect("utf-8")],
         Some(&serde_json::to_string(&request).expect("serialize")),
         &[
@@ -668,7 +667,7 @@ fn missing_toolchain_still_reports_accepted_then_failed() {
             ("SCENE_CORE_TOOLCHAIN_FINGERPRINT", &fingerprint),
         ],
     );
-    assert_eq!(exit_code, 2);
+    assert_eq!(exit_code, 2, "stdout: {stdout} stderr: {stderr}");
     let events: Vec<EventEnvelope> = stdout
         .lines()
         .map(|line| serde_json::from_str(line).expect("event JSON"))
