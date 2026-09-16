@@ -129,9 +129,16 @@ struct SideData {
     rotation: Option<f64>,
 }
 
+/// Normalized media plus the container origin in file time, needed to seek.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProbeOutcome {
+    pub media: NormalizedMedia,
+    pub origin_ms: Option<i64>,
+}
+
 /// Runs the locked ffprobe and normalizes its output.
 pub fn probe(toolchain: &Toolchain, input: &Path) -> Result<NormalizedMedia, ProbeError> {
-    probe_with_cancel(toolchain, input, None)
+    Ok(probe_with_cancel(toolchain, input, None)?.media)
 }
 
 /// Same as [`probe`], with an optional cancellation flag for deadline and
@@ -140,7 +147,7 @@ pub fn probe_with_cancel(
     toolchain: &Toolchain,
     input: &Path,
     cancellation: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
-) -> Result<NormalizedMedia, ProbeError> {
+) -> Result<ProbeOutcome, ProbeError> {
     if !input.is_file() {
         return Err(ProbeError::UnsupportedInput);
     }
@@ -184,6 +191,20 @@ pub fn probe_with_cancel(
     normalize(&parsed, input)
 }
 
+fn origin_ms(parsed: &FfprobeOutput) -> Result<Option<i64>, ProbeError> {
+    match parsed
+        .format
+        .as_ref()
+        .and_then(|format| format.start_time.as_deref())
+    {
+        Some(value) => match optional_seconds(value)? {
+            Some(origin) => Ok(origin.to_ms_round_nearest().ok()),
+            None => Ok(None),
+        },
+        None => Ok(None),
+    }
+}
+
 fn classify_failure(stdout: &str, stderr: &str) -> ProbeError {
     let haystack = format!("{stdout}\n{stderr}").to_lowercase();
     if haystack.contains("invalid data")
@@ -197,7 +218,7 @@ fn classify_failure(stdout: &str, stderr: &str) -> ProbeError {
     }
 }
 
-fn normalize(parsed: &FfprobeOutput, input: &Path) -> Result<NormalizedMedia, ProbeError> {
+fn normalize(parsed: &FfprobeOutput, input: &Path) -> Result<ProbeOutcome, ProbeError> {
     let format = parsed.format.as_ref();
     let format_name = format
         .and_then(|format| format.format_name.clone())
@@ -334,7 +355,10 @@ fn normalize(parsed: &FfprobeOutput, input: &Path) -> Result<NormalizedMedia, Pr
     media
         .validate()
         .map_err(|_| ProbeError::EngineInternal("normalized media failed validation"))?;
-    Ok(media)
+    Ok(ProbeOutcome {
+        media,
+        origin_ms: origin_ms(parsed)?,
+    })
 }
 
 fn stream_kind(stream: &StreamInfo) -> Option<StreamKind> {
@@ -440,7 +464,7 @@ mod tests {
     }
 
     fn normalize_json(value: &str) -> Result<NormalizedMedia, ProbeError> {
-        normalize(&probe_json(value), Path::new("/nonexistent/fixture.media"))
+        Ok(normalize(&probe_json(value), Path::new("/nonexistent/fixture.media"))?.media)
     }
 
     const HEADER: &str = r#""format_name": "matroska,webm", "duration": "60.000000", "start_time": "10.000000", "bit_rate": "1000000", "size": "1048576""#;
