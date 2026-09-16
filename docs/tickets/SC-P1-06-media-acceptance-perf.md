@@ -39,10 +39,15 @@
 - `scripts/bench-engine.sh`：用 `/usr/bin/time -v` 包裹单个 CLI 调用，实测引擎峰值 RSS 与墙钟（probe 34 MiB / 0.01 s；extract_preview 43 MiB / 0.05 s），已记入性能文档。
 - 大文件：20 GiB（20,480 MiB）已实测——单遍 567 MiB/s（磁盘受限），峰值 RSS 152 MiB；256 MiB 缓存命中时 3.6 GiB/s。复现：`SCENE_CORE_BENCH_LARGE_MIB=20480 bash scripts/bench-media.sh`。
 
+增量四（2026-09-16，真实样本）：
+
+- 用户提供的真实 H.264/AAC MP4（96.52 s，1280x720@30）实测：`probe` 与 ffprobe 逐项一致（容器/时长/起点/时基/尺寸/帧率/采样率），`extract_preview` 产出 opening + midpoint（512x288，presentationTimeMs 诚实为 null）。记录于 `docs/acceptance/real-media-acceptance.md`，样本与文件名不入库。
+- 进程表现：probe 0.02 s / 38.8 MiB；extract_preview 0.13 s / 86.9 MiB；事件无主机路径。
+
 未完成（需真实资源，不伪装为已通过）：
 
-- 真实/公开脱敏媒体样本、预览期望图与播放器点击对照；分析抽帧帧选择语义按政策属于未来独立 operation。
-- 并发/多请求下的峰值内存与磁盘配额（单请求基线已完成）。
+- 非零/负起点、编辑列表、VFR/B 帧、旋转、附件图、损坏等**真实**样本（合成覆盖已有）；播放器点击对照。
+- 并发/多请求下的峰值内存与磁盘配额（单请求与 20 GiB 已完成）。
 
 ## 依赖
 
