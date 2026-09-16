@@ -333,11 +333,6 @@ fn normalize(parsed: &FfprobeOutput, input: &Path) -> Result<ProbeOutcome, Probe
     let primary_video_stream_index = streams
         .iter()
         .find(|stream| stream.kind == StreamKind::Video && !stream.attached_picture)
-        .or_else(|| {
-            streams
-                .iter()
-                .find(|stream| stream.kind == StreamKind::Video)
-        })
         .map(|stream| stream.index);
 
     let container = ContainerInfo {
@@ -528,14 +523,17 @@ mod tests {
     }
 
     #[test]
-    fn attached_pictures_are_not_the_primary_video_stream() {
+    fn attached_pictures_are_never_the_primary_video_stream() {
         let value = r#"{ "format": { "format_name": "mp3" },
              "streams": [
                { "index": 0, "codec_name": "mjpeg", "codec_type": "video", "disposition": { "attached_pic": 1 } },
                { "index": 1, "codec_name": "mp3", "codec_type": "audio", "sample_rate": "44100", "channels": 2 }
              ] }"#;
         let media = normalize_json(value).expect("normalizes");
-        assert_eq!(media.primary_video_stream_index, Some(0));
+        assert_eq!(
+            media.primary_video_stream_index, None,
+            "cover art must not become the primary video stream"
+        );
         assert!(media.streams[0].attached_picture);
         assert_eq!(media.streams[0].kind, StreamKind::Video);
     }
