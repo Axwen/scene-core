@@ -27,11 +27,17 @@
 - `docs/performance/media-baseline.md`：首版设备/命令/数据（预览 25 ms/17.7 KB；debug 哈希 ≈52 MiB/s），并明确不是发布承诺。
 - workspace 共 159 tests，clippy 无 allow。
 
-未完成（增量二）：
+增量二（2026-09-16，release 基线与预览 golden）：
 
-- release 构建的 probe/预览 P50/P95、峰值内存、20 GiB（或缩比）大文件与磁盘预算；
-- 真实/公开脱敏样本、golden 归一化 JSON 与预览期望图；
-- 与播放器的点击对照记录；分析抽帧帧选择语义按政策属于未来 operation。
+- `tests/baselines.rs`（`#[ignore]`）+ `scripts/bench-media.sh`：release 下测量 probe/预览 P50/P95、预览体积、256 MiB 流式哈希吞吐与 harness 峰值 RSS。
+- 结果（WSL2 x86_64）：probe p50 10.4 / p95 10.5 ms；预览 p50 20.5 / p95 20.5 ms，17,687 字节；哈希 ≈3.6 GiB/s；峰值 RSS ≈152 MiB。已记入 `docs/performance/media-baseline.md`。
+- 预览 golden：`fixtures/media/golden/preview-opening.sha256`，`media_acceptance` 常态断言生成字节与 golden 一致（`UPDATE_MEDIA_GOLDEN=1` 重生成）。
+- 哈希吞吐常态门槛放宽为 >2 MiB/s（仅防灾难性退化），实测值打印留档。
+
+未完成：
+
+- 20 GiB（缩比）大文件 P95、独立引擎峰值内存与磁盘预算；
+- 真实/公开脱敏样本、玩家器点击对照记录；分析抽帧帧选择语义按政策属于未来独立 operation。
 
 ## 依赖
 
