@@ -1,0 +1,11 @@
+{
+  "inputSetVersion": "1",
+  "inputs": [
+    {
+      "role": "source_media",
+      "ref": "input/source.media",
+      "contentHash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "byteSize": 1048576
+    }
+  ]
+}

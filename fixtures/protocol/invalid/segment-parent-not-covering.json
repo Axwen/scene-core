@@ -1,0 +1,44 @@
+[
+  {
+    "segmentId": "scene_000001",
+    "kind": "sceneCandidate",
+    "startMs": 0,
+    "endMs": 3000,
+    "parentSegmentId": null,
+    "ordinal": 0,
+    "segmentationPolicyRef": "shot-boundary/example@1",
+    "provenance": {
+      "derivationKey": "sha256:c2e6f53f21f95e676db24ffdb1731f0dec295f14fb9b180143923b0c0cfa7e87",
+      "engineCacheCompatibilityId": "segment-shot-v1",
+      "toolchainFingerprint": "sha256:abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+    }
+  },
+  {
+    "segmentId": "shot_000001",
+    "kind": "shot",
+    "startMs": 0,
+    "endMs": 4000,
+    "parentSegmentId": "scene_000001",
+    "ordinal": 0,
+    "segmentationPolicyRef": "shot-boundary/example@1",
+    "provenance": {
+      "derivationKey": "sha256:c2e6f53f21f95e676db24ffdb1731f0dec295f14fb9b180143923b0c0cfa7e87",
+      "engineCacheCompatibilityId": "segment-shot-v1",
+      "toolchainFingerprint": "sha256:abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+    }
+  },
+  {
+    "segmentId": "shot_000002",
+    "kind": "shot",
+    "startMs": 4000,
+    "endMs": 10000,
+    "parentSegmentId": "scene_000001",
+    "ordinal": 1,
+    "segmentationPolicyRef": "shot-boundary/example@1",
+    "provenance": {
+      "derivationKey": "sha256:c2e6f53f21f95e676db24ffdb1731f0dec295f14fb9b180143923b0c0cfa7e87",
+      "engineCacheCompatibilityId": "segment-shot-v1",
+      "toolchainFingerprint": "sha256:abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+    }
+  }
+]

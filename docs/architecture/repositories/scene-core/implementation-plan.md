@@ -44,7 +44,7 @@ Phase 0A 完成后，Phase 1 可以开始媒体 operation 的实现；但正式 
 - `docs/tickets/SC-P0-01` 至 `SC-P0-07`：Issue-ready 的纵向任务拆分与依赖关系。
 - `engine-contract.md`：Protocol 0.1 消费侧摘要，Rust DTO 为事实源。
 - `cross-repository-contracts.md`：Web RAG、scene-core、scene-seek 的边界和迁移约束。
-- `crates/scene-core-protocol` 已实现 Protocol 0.1 严格 DTO/解析、canonical JSON 摘要、输入与派生身份、`TemporalSegment` 校验和已确认时间规则的纯转换，并有 83 个通过用例（含事件状态机）；`schemas/0.1/`、`fixtures/protocol/**`、`version`/`doctor` 和媒体运行时仍未实现。本次增量审查提供 plan-level 证据，不声称新增功能或 Windows 验证通过。
+- `crates/scene-core-protocol` 已实现 Protocol 0.1 严格 DTO/解析、canonical JSON 摘要、输入与派生身份、`TemporalSegment` 校验和已确认时间规则的纯转换，并有 91 个通过用例（含事件状态机与 fixture conformance）；`schemas/0.1/`、`fixtures/protocol/**`、`version`/`doctor` 和媒体运行时仍未实现。本次增量审查提供 plan-level 证据，不声称新增功能或 Windows 验证通过。
 
 ## NOT in scope
 

@@ -1,0 +1,894 @@
+{
+  "manifestVersion": "1",
+  "entrypoints": {
+    "control": "parse_control_line + StartRequest/CancelRequest validate",
+    "control-stream": "parse_control_line + ControlStreamValidator",
+    "event": "EventEnvelope::parse + validate",
+    "transcript": "EventEnvelope::parse + EventStreamValidator",
+    "manifest": "ArtifactManifest::validate",
+    "media": "NormalizedMedia::validate",
+    "segment": "validate_temporal_segments",
+    "inputSet": "InputSetDescriptor::validate + input_fingerprint",
+    "derivation": "DerivationDescriptor::validate",
+    "engineIdentity": "EngineIdentity::validate",
+    "toolchainIdentity": "ToolchainIdentity::validate"
+  },
+  "fixtures": [
+    {
+      "file": "valid/control-start-probe.json",
+      "kind": "valid",
+      "entrypoint": "control",
+      "rule": "minimal valid probe StartRequest",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "valid/control-start-extract-preview.json",
+      "kind": "valid",
+      "entrypoint": "control",
+      "rule": "minimal valid extract_preview StartRequest",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "valid/control-cancel.json",
+      "kind": "valid",
+      "entrypoint": "control",
+      "rule": "valid CancelRequest",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "valid/engine-identity.json",
+      "kind": "valid",
+      "entrypoint": "engineIdentity",
+      "rule": "shared EngineIdentity",
+      "schema": "engine-identity.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "valid/toolchain-identity.json",
+      "kind": "valid",
+      "entrypoint": "toolchainIdentity",
+      "rule": "shared ToolchainIdentity",
+      "schema": "toolchain-identity.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "valid/input-set-source-media.json",
+      "kind": "valid",
+      "entrypoint": "inputSet",
+      "rule": "single source_media input set",
+      "schema": "input-set-descriptor.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "valid/derivation-descriptor-probe.json",
+      "kind": "valid",
+      "entrypoint": "derivation",
+      "rule": "registered probe derivation descriptor",
+      "schema": "derivation-descriptor.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "valid/media-shared-origin-offsets.json",
+      "kind": "valid",
+      "entrypoint": "media",
+      "rule": "one container origin keeps the 80ms audio offset",
+      "schema": "normalized-media.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "valid/media-unknown-origin.json",
+      "kind": "valid",
+      "entrypoint": "media",
+      "rule": "unknown origin and starts stay null instead of zero",
+      "schema": "normalized-media.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "valid/media-negative-stream-start.json",
+      "kind": "valid",
+      "entrypoint": "media",
+      "rule": "signed stream starts accept negative values",
+      "schema": "normalized-media.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "valid/artifact-manifest-opening.json",
+      "kind": "valid",
+      "entrypoint": "manifest",
+      "rule": "opening-only preview manifest",
+      "schema": "artifact-manifest.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "valid/artifact-manifest-full.json",
+      "kind": "valid",
+      "entrypoint": "manifest",
+      "rule": "opening plus midpoint preview manifest",
+      "schema": "artifact-manifest.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "valid/temporal-segments.json",
+      "kind": "valid",
+      "entrypoint": "segment",
+      "rule": "sceneCandidate with two covering shot children",
+      "schema": "temporal-segment.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "valid/event-accepted.json",
+      "kind": "valid",
+      "entrypoint": "event",
+      "rule": "accepted event at sequence 1",
+      "schema": "engine-event.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "valid/event-completed-probe.json",
+      "kind": "valid",
+      "entrypoint": "event",
+      "rule": "completed probe event with media and resource usage",
+      "schema": "engine-event.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "valid/event-completed-extract-preview.json",
+      "kind": "valid",
+      "entrypoint": "event",
+      "rule": "completed extract_preview event with manifest",
+      "schema": "engine-event.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-bom.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "UTF-8 BOM is rejected",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-duplicate-request-id.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "duplicate JSON keys are rejected",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-unknown-field.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "unknown start fields are rejected",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-missing-execution-context.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "executionContext is required",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-missing-inputs.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "inputs is required",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-unsupported-protocol.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "unsupported protocol version",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "UNSUPPORTED_PROTOCOL",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-deadline-too-small.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "deadlineMs below 1 is rejected",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-deadline-too-large.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "deadlineMs above 600000 is rejected",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-options-unknown-key.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "options must be an empty object",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-options-array.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "options must be an object, not an array",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-unknown-message-type.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "messageType must be start or cancel",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-unknown-operation.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "unregistered operations are rejected",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-unknown-output-contract.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "outputContractVersion must be the registered contract",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-ref-absolute.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "absolute input ref is rejected",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-ref-traversal.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "traversal input ref is rejected",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-ref-unc.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "UNC input ref is rejected",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-ref-ads.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "ADS input ref is rejected",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-ref-drive.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "drive-letter input ref is rejected",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-duplicate-role.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "0.1 allows exactly one source_media input",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-fingerprint-mismatch.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "inputFingerprint must match the recomputed logical input set",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-malformed-digest.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "digests must be sha256:<64 lowercase hex>",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/media-container-start-nonzero.json",
+      "kind": "invalid",
+      "entrypoint": "media",
+      "rule": "container startTimeMs is 0 or null only",
+      "schema": "normalized-media.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/media-unknown-field.json",
+      "kind": "invalid",
+      "entrypoint": "media",
+      "rule": "unknown media fields are rejected",
+      "schema": "normalized-media.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/media-timebase-denominator-zero.json",
+      "kind": "invalid",
+      "entrypoint": "media",
+      "rule": "rational denominators must be positive",
+      "schema": "normalized-media.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/media-negative-duration.json",
+      "kind": "invalid",
+      "entrypoint": "media",
+      "rule": "durations are non-negative or null",
+      "schema": "normalized-media.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/media-stream-mixed-fields.json",
+      "kind": "invalid",
+      "entrypoint": "media",
+      "rule": "audio streams must not carry video fields",
+      "schema": "normalized-media.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/media-primary-index-invalid.json",
+      "kind": "invalid",
+      "entrypoint": "media",
+      "rule": "primaryVideoStreamIndex must reference a video stream",
+      "schema": "normalized-media.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/manifest-midpoint-without-opening.json",
+      "kind": "invalid",
+      "entrypoint": "manifest",
+      "rule": "preview artifacts require opening first",
+      "schema": "artifact-manifest.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/manifest-tampered-derivation-key.json",
+      "kind": "invalid",
+      "entrypoint": "manifest",
+      "rule": "derivationKey must match the recomputed descriptor",
+      "schema": "artifact-manifest.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/manifest-negative-requested-time.json",
+      "kind": "invalid",
+      "entrypoint": "manifest",
+      "rule": "public requestedTimeMs is non-negative",
+      "schema": "artifact-manifest.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/manifest-artifact-zero-size.json",
+      "kind": "invalid",
+      "entrypoint": "manifest",
+      "rule": "preview byteSize must be positive",
+      "schema": "artifact-manifest.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/manifest-unsafe-relative-ref.json",
+      "kind": "invalid",
+      "entrypoint": "manifest",
+      "rule": "artifact refs must be safe relative paths",
+      "schema": "artifact-manifest.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/segment-end-equals-start.json",
+      "kind": "invalid",
+      "entrypoint": "segment",
+      "rule": "ranges must satisfy endMs > startMs",
+      "schema": "temporal-segment.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/segment-ordinal-mismatch.json",
+      "kind": "invalid",
+      "entrypoint": "segment",
+      "rule": "ordinal must equal the per-kind sort position",
+      "schema": "temporal-segment.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/segment-parent-cycle.json",
+      "kind": "invalid",
+      "entrypoint": "segment",
+      "rule": "parent chains must not form a cycle",
+      "schema": "temporal-segment.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/segment-parent-not-covering.json",
+      "kind": "invalid",
+      "entrypoint": "segment",
+      "rule": "parent must cover the child interval",
+      "schema": "temporal-segment.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/input-set-duplicate-role.json",
+      "kind": "invalid",
+      "entrypoint": "inputSet",
+      "rule": "roles must be unique",
+      "schema": "input-set-descriptor.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/input-set-wrong-role.json",
+      "kind": "invalid",
+      "entrypoint": "inputSet",
+      "rule": "0.1 requires the source_media role",
+      "schema": "input-set-descriptor.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/input-set-too-large.json",
+      "kind": "invalid",
+      "entrypoint": "inputSet",
+      "rule": "byteSize must not exceed 21474836480",
+      "schema": "input-set-descriptor.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/derivation-unregistered-contract.json",
+      "kind": "invalid",
+      "entrypoint": "derivation",
+      "rule": "output contract must match the operation",
+      "schema": "derivation-descriptor.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/transcript-duplicate-sequence.jsonl",
+      "kind": "invalid",
+      "entrypoint": "transcript",
+      "rule": "duplicate sequence is rejected",
+      "schema": "engine-event.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/transcript-skipped-sequence.jsonl",
+      "kind": "invalid",
+      "entrypoint": "transcript",
+      "rule": "sequence must increase by exactly 1",
+      "schema": "engine-event.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/transcript-second-accepted.jsonl",
+      "kind": "invalid",
+      "entrypoint": "transcript",
+      "rule": "accepted must appear exactly once",
+      "schema": "engine-event.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/transcript-event-after-terminal.jsonl",
+      "kind": "invalid",
+      "entrypoint": "transcript",
+      "rule": "no event may follow the terminal event",
+      "schema": "engine-event.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/transcript-identity-mismatch.jsonl",
+      "kind": "invalid",
+      "entrypoint": "transcript",
+      "rule": "events must echo the first event identity",
+      "schema": "engine-event.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-stream-second-start.jsonl",
+      "kind": "invalid",
+      "entrypoint": "control-stream",
+      "rule": "only one StartRequest is allowed",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-stream-second-cancel.jsonl",
+      "kind": "invalid",
+      "entrypoint": "control-stream",
+      "rule": "at most one CancelRequest is allowed",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-stream-wrong-request-id-cancel.jsonl",
+      "kind": "invalid",
+      "entrypoint": "control-stream",
+      "rule": "cancel must reuse the StartRequest requestId",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-stream-cancel-first.jsonl",
+      "kind": "invalid",
+      "entrypoint": "control-stream",
+      "rule": "the first line must be a StartRequest",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "golden-jsonl/probe-success.jsonl",
+      "kind": "golden-jsonl",
+      "entrypoint": "transcript",
+      "rule": "accepted -> progress -> completed probe",
+      "schema": "engine-event.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": 0
+      }
+    },
+    {
+      "file": "golden-jsonl/extract-preview-success.jsonl",
+      "kind": "golden-jsonl",
+      "entrypoint": "transcript",
+      "rule": "accepted -> completed extract_preview",
+      "schema": "engine-event.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": 0
+      }
+    },
+    {
+      "file": "golden-jsonl/invalid-request-failed.jsonl",
+      "kind": "golden-jsonl",
+      "entrypoint": "transcript",
+      "rule": "invalid request fails at sequence 1 without accepted",
+      "schema": "engine-event.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": 2
+      }
+    },
+    {
+      "file": "golden-jsonl/cancelled.jsonl",
+      "kind": "golden-jsonl",
+      "entrypoint": "transcript",
+      "rule": "accepted -> cancelled exits 130",
+      "schema": "engine-event.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": 130
+      }
+    },
+    {
+      "file": "golden-jsonl/timed-out.jsonl",
+      "kind": "golden-jsonl",
+      "entrypoint": "transcript",
+      "rule": "accepted -> timed_out exits 124",
+      "schema": "engine-event.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": 124
+      }
+    },
+    {
+      "file": "golden-jsonl/engine-internal-failed.jsonl",
+      "kind": "golden-jsonl",
+      "entrypoint": "transcript",
+      "rule": "engine internal failure exits 1",
+      "schema": "engine-event.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": 1
+      }
+    },
+    {
+      "file": "golden-jsonl/resource-limit-failed.jsonl",
+      "kind": "golden-jsonl",
+      "entrypoint": "transcript",
+      "rule": "resource limit failure exits 3",
+      "schema": "engine-event.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": 3
+      }
+    },
+    {
+      "file": "golden-jsonl/control-start-cancel.jsonl",
+      "kind": "golden-jsonl",
+      "entrypoint": "control-stream",
+      "rule": "start followed by matching cancel",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": null
+      }
+    }
+  ]
+}

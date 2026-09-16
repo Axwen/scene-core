@@ -1,0 +1,59 @@
+{
+  "container": {
+    "formatName": "matroska,webm",
+    "durationMs": null,
+    "startTimeMs": null,
+    "bitRateBps": 1000000,
+    "fileSizeBytes": 1048576
+  },
+  "streams": [
+    {
+      "index": 0,
+      "kind": "video",
+      "codecName": "h264",
+      "durationMs": null,
+      "startTimeMs": null,
+      "timeBase": {
+        "num": 1,
+        "den": 1000
+      },
+      "defaultDisposition": true,
+      "attachedPicture": false,
+      "codedWidth": 1920,
+      "codedHeight": 1080,
+      "displayWidth": 1920,
+      "displayHeight": 1080,
+      "rotationDegrees": 0,
+      "averageFrameRate": {
+        "num": 30,
+        "den": 1
+      },
+      "sampleRate": null,
+      "channels": null,
+      "channelLayout": null
+    },
+    {
+      "index": 1,
+      "kind": "audio",
+      "codecName": "aac",
+      "durationMs": null,
+      "startTimeMs": null,
+      "timeBase": {
+        "num": 1,
+        "den": 48000
+      },
+      "defaultDisposition": true,
+      "attachedPicture": false,
+      "codedWidth": null,
+      "codedHeight": null,
+      "displayWidth": null,
+      "displayHeight": null,
+      "rotationDegrees": null,
+      "averageFrameRate": null,
+      "sampleRate": 48000,
+      "channels": 2,
+      "channelLayout": "stereo"
+    }
+  ],
+  "primaryVideoStreamIndex": 0
+}

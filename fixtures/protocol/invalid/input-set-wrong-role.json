@@ -1,0 +1,11 @@
+{
+  "inputSetVersion": "1",
+  "inputs": [
+    {
+      "role": "sidecar_metadata",
+      "ref": "input/source.media",
+      "contentHash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "byteSize": 1048576
+    }
+  ]
+}

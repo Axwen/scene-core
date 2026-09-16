@@ -6,7 +6,7 @@
 
 use crate::MAX_CONTROL_LINE_BYTES;
 use crate::canonical::{CanonicalJsonError, canonical_sha256};
-use crate::error::{ProtocolError, ProtocolResult};
+use crate::error::{ProtocolError, ProtocolResult, ValidationError};
 use crate::execution::ExecutionContext;
 use crate::framing::parse_strict_json;
 use crate::identity::{DerivationDescriptor, DerivationIdentity};
@@ -282,6 +282,65 @@ struct MessageTypeProbe {
     message_type: String,
 }
 
+/// Pure validator for one request's control stream: the first line must be the
+/// single `StartRequest`, followed by at most one `CancelRequest` that reuses
+/// the same `requestId`. EOF is not a cancel.
+#[derive(Debug, Default)]
+pub struct ControlStreamValidator {
+    request_id: Option<Identifier>,
+    cancelled: bool,
+}
+
+impl ControlStreamValidator {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn accept(&mut self, message: &ControlMessage) -> Result<(), ValidationError> {
+        match message {
+            ControlMessage::Start(start) => {
+                if self.request_id.is_some() {
+                    return Err(ValidationError::new(
+                        "messageType",
+                        "the first line must be the only StartRequest",
+                    ));
+                }
+                self.request_id = Some(start.request_id.clone());
+            }
+            ControlMessage::Cancel(cancel) => {
+                let Some(expected) = &self.request_id else {
+                    return Err(ValidationError::new(
+                        "messageType",
+                        "the first line must be a StartRequest",
+                    ));
+                };
+                if self.cancelled {
+                    return Err(ValidationError::new(
+                        "messageType",
+                        "at most one CancelRequest is allowed",
+                    ));
+                }
+                if &cancel.request_id != expected {
+                    return Err(ValidationError::new(
+                        "requestId",
+                        "cancel must reuse the StartRequest requestId",
+                    ));
+                }
+                self.cancelled = true;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn request_id(&self) -> Option<&Identifier> {
+        self.request_id.as_ref()
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -385,5 +444,53 @@ mod tests {
         let line = serde_json::to_string(&probe_request()).expect("serializes");
         let mutated = line.replacen("\"options\":{}", "\"options\":{\"profile\":\"custom\"}", 1);
         assert!(StartRequest::parse(&mutated).is_err());
+    }
+
+    fn cancel_line(request_id: &str) -> String {
+        format!(
+            r#"{{"engineProtocolVersion":"0.1","messageType":"cancel","requestId":"{request_id}"}}"#
+        )
+    }
+
+    #[test]
+    fn control_stream_accepts_start_then_matching_cancel() {
+        let start = serde_json::to_string(&probe_request()).expect("serializes");
+        let mut validator = ControlStreamValidator::new();
+        let message = parse_control_line(&start).expect("start");
+        validator.accept(&message).expect("start accepted");
+        assert_eq!(
+            validator.request_id().expect("request id").as_str(),
+            "req_01"
+        );
+
+        let message = parse_control_line(&cancel_line("req_01")).expect("cancel");
+        validator
+            .accept(&message)
+            .expect("matching cancel accepted");
+        assert!(validator.is_cancelled());
+    }
+
+    #[test]
+    fn control_stream_rejects_second_start_and_wrong_cancels() {
+        let start = serde_json::to_string(&probe_request()).expect("serializes");
+        let start_message = parse_control_line(&start).expect("start");
+
+        let mut second_start = ControlStreamValidator::new();
+        second_start.accept(&start_message).expect("start");
+        assert!(second_start.accept(&start_message).is_err());
+
+        let mut wrong_id = ControlStreamValidator::new();
+        wrong_id.accept(&start_message).expect("start");
+        let wrong = parse_control_line(&cancel_line("req_02")).expect("cancel");
+        assert!(wrong_id.accept(&wrong).is_err());
+
+        let mut second_cancel = ControlStreamValidator::new();
+        second_cancel.accept(&start_message).expect("start");
+        let cancel = parse_control_line(&cancel_line("req_01")).expect("cancel");
+        second_cancel.accept(&cancel).expect("cancel");
+        assert!(second_cancel.accept(&cancel).is_err());
+
+        let mut cancel_first = ControlStreamValidator::new();
+        assert!(cancel_first.accept(&cancel).is_err());
     }
 }

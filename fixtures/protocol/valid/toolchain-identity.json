@@ -1,0 +1,7 @@
+{
+  "toolchainFingerprint": "sha256:abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+  "target": "x86_64-pc-windows-msvc",
+  "ffmpegVersion": "7.1.1",
+  "ffprobeVersion": "7.1.1",
+  "capabilitySetFingerprint": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+}

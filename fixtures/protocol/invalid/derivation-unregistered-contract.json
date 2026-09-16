@@ -1,0 +1,9 @@
+{
+  "derivationDescriptorVersion": "1",
+  "inputFingerprint": "sha256:ceaeaa5c772ab1951c10a0c86f5dd51c5a14987fc8d8ea153c501e645cfc9598",
+  "operation": "probe",
+  "operationConfigHash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+  "outputContractVersion": "extract-preview-result/1",
+  "engineCacheCompatibilityId": "scene-core-output-v1",
+  "toolchainFingerprint": "sha256:abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+}

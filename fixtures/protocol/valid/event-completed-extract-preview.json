@@ -1,0 +1,144 @@
+{
+  "engineProtocolVersion": "0.1",
+  "messageType": "event",
+  "requestId": "req_01",
+  "sourceVersionId": "sourcev_01",
+  "inputFingerprint": "sha256:ceaeaa5c772ab1951c10a0c86f5dd51c5a14987fc8d8ea153c501e645cfc9598",
+  "derivationKey": "sha256:d310c9d07f25efa54442e1eb8ef218706c2def29581833b4911d580ec7cc6035",
+  "operation": "extract_preview",
+  "sequence": 2,
+  "eventType": "completed",
+  "engine": {
+    "engineVersion": "0.1.0-alpha.1",
+    "engineCommit": "0123456789abcdef0123456789abcdef01234567",
+    "target": "x86_64-pc-windows-msvc",
+    "engineCacheCompatibilityId": "scene-core-output-v1",
+    "supportedProtocolVersions": [
+      "0.1"
+    ],
+    "implementedOperations": []
+  },
+  "executionContext": {
+    "runId": "run_01",
+    "generation": 0,
+    "attempt": 1,
+    "scope": "asset"
+  },
+  "occurredAt": "2026-09-07T00:00:00Z",
+  "result": {
+    "operation": "extract_preview",
+    "media": {
+      "container": {
+        "formatName": "matroska,webm",
+        "durationMs": 60000,
+        "startTimeMs": 0,
+        "bitRateBps": 1000000,
+        "fileSizeBytes": 1048576
+      },
+      "streams": [
+        {
+          "index": 0,
+          "kind": "video",
+          "codecName": "h264",
+          "durationMs": 60000,
+          "startTimeMs": 0,
+          "timeBase": {
+            "num": 1,
+            "den": 1000
+          },
+          "defaultDisposition": true,
+          "attachedPicture": false,
+          "codedWidth": 1920,
+          "codedHeight": 1080,
+          "displayWidth": 1920,
+          "displayHeight": 1080,
+          "rotationDegrees": 0,
+          "averageFrameRate": {
+            "num": 30,
+            "den": 1
+          },
+          "sampleRate": null,
+          "channels": null,
+          "channelLayout": null
+        },
+        {
+          "index": 1,
+          "kind": "audio",
+          "codecName": "aac",
+          "durationMs": 60000,
+          "startTimeMs": 80,
+          "timeBase": {
+            "num": 1,
+            "den": 48000
+          },
+          "defaultDisposition": true,
+          "attachedPicture": false,
+          "codedWidth": null,
+          "codedHeight": null,
+          "displayWidth": null,
+          "displayHeight": null,
+          "rotationDegrees": null,
+          "averageFrameRate": null,
+          "sampleRate": 48000,
+          "channels": 2,
+          "channelLayout": "stereo"
+        }
+      ],
+      "primaryVideoStreamIndex": 0
+    },
+    "artifactManifest": {
+      "manifestVersion": "0.1",
+      "requestId": "req_01",
+      "sourceVersionId": "sourcev_01",
+      "inputFingerprint": "sha256:ceaeaa5c772ab1951c10a0c86f5dd51c5a14987fc8d8ea153c501e645cfc9598",
+      "derivationKey": "sha256:d310c9d07f25efa54442e1eb8ef218706c2def29581833b4911d580ec7cc6035",
+      "operation": "extract_preview",
+      "operationConfigHash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "outputContractVersion": "extract-preview-result/1",
+      "engine": {
+        "engineVersion": "0.1.0-alpha.1",
+        "engineCommit": "0123456789abcdef0123456789abcdef01234567",
+        "target": "x86_64-pc-windows-msvc",
+        "engineCacheCompatibilityId": "scene-core-output-v1",
+        "supportedProtocolVersions": [
+          "0.1"
+        ],
+        "implementedOperations": []
+      },
+      "toolchainFingerprint": "sha256:abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+      "artifacts": [
+        {
+          "artifactId": "preview-opening",
+          "kind": "previewFrame",
+          "role": "opening",
+          "mediaType": "image/jpeg",
+          "relativeRef": "output/preview/opening.jpg",
+          "byteSize": 12345,
+          "contentHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "requestedTimeMs": 0,
+          "presentationTimeMs": null,
+          "pixelWidth": 512,
+          "pixelHeight": 288
+        },
+        {
+          "artifactId": "preview-midpoint",
+          "kind": "previewFrame",
+          "role": "midpoint",
+          "mediaType": "image/jpeg",
+          "relativeRef": "output/preview/midpoint.jpg",
+          "byteSize": 12345,
+          "contentHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "requestedTimeMs": 30000,
+          "presentationTimeMs": 30004,
+          "pixelWidth": 512,
+          "pixelHeight": 288
+        }
+      ]
+    },
+    "resourceUsage": {
+      "wallTimeMs": 200,
+      "cpuTimeMs": null,
+      "peakMemoryBytes": null
+    }
+  }
+}

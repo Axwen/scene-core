@@ -1,0 +1,10 @@
+{
+  "engineVersion": "0.1.0-alpha.1",
+  "engineCommit": "0123456789abcdef0123456789abcdef01234567",
+  "target": "x86_64-pc-windows-msvc",
+  "engineCacheCompatibilityId": "scene-core-output-v1",
+  "supportedProtocolVersions": [
+    "0.1"
+  ],
+  "implementedOperations": []
+}

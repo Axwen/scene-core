@@ -1,0 +1,36 @@
+{
+  "manifestVersion": "0.1",
+  "requestId": "req_01",
+  "sourceVersionId": "sourcev_01",
+  "inputFingerprint": "sha256:ceaeaa5c772ab1951c10a0c86f5dd51c5a14987fc8d8ea153c501e645cfc9598",
+  "derivationKey": "sha256:d310c9d07f25efa54442e1eb8ef218706c2def29581833b4911d580ec7cc6035",
+  "operation": "extract_preview",
+  "operationConfigHash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+  "outputContractVersion": "extract-preview-result/1",
+  "engine": {
+    "engineVersion": "0.1.0-alpha.1",
+    "engineCommit": "0123456789abcdef0123456789abcdef01234567",
+    "target": "x86_64-pc-windows-msvc",
+    "engineCacheCompatibilityId": "scene-core-output-v1",
+    "supportedProtocolVersions": [
+      "0.1"
+    ],
+    "implementedOperations": []
+  },
+  "toolchainFingerprint": "sha256:abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+  "artifacts": [
+    {
+      "artifactId": "preview-midpoint",
+      "kind": "previewFrame",
+      "role": "midpoint",
+      "mediaType": "image/jpeg",
+      "relativeRef": "output/preview/midpoint.jpg",
+      "byteSize": 12345,
+      "contentHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "requestedTimeMs": 30000,
+      "presentationTimeMs": 30004,
+      "pixelWidth": 512,
+      "pixelHeight": 288
+    }
+  ]
+}

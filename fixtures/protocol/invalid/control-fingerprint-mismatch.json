@@ -1,0 +1,26 @@
+{
+  "engineProtocolVersion": "0.1",
+  "messageType": "start",
+  "requestId": "req_01",
+  "operation": "probe",
+  "sourceVersionId": "sourcev_01",
+  "inputs": [
+    {
+      "role": "source_media",
+      "ref": "input/source.media",
+      "contentHash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "byteSize": 1048576
+    }
+  ],
+  "inputFingerprint": "sha256:abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+  "operationConfigHash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+  "outputContractVersion": "probe-result/1",
+  "derivationKey": "sha256:c2e6f53f21f95e676db24ffdb1731f0dec295f14fb9b180143923b0c0cfa7e87",
+  "executionContext": {
+    "runId": "run_01",
+    "generation": 0,
+    "attempt": 1,
+    "scope": "asset"
+  },
+  "options": {}
+}

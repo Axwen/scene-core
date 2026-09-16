@@ -27,9 +27,16 @@
 - 已生成：control-message、engine-event、normalized-media、artifact-manifest、temporal-segment、input-set-descriptor、derivation-descriptor，以及共享的 engine-identity、toolchain-identity。
 - 验收 5 的 Schema 断言已覆盖：有符号 `stream.startTimeMs`、`container.startTimeMs` 仅 0/null、公共 `requestedTimeMs` 非负。
 
+增量二（2026-09-16，fixtures 与 runner）：
+
+- `fixtures/protocol/` 已落地：16 个 valid、49 个 invalid、8 个 golden transcript，另有 `fixture-manifest.json` 逐文件映射规则、Schema、预期结果、错误码和退出码。
+- 新增 `ControlStreamValidator` 补齐控制流约定：首行唯一 StartRequest、至多一个同 requestId 的 CancelRequest；覆盖第二个 start/cancel 与错误 requestId cancel。
+- `tests/fixture_conformance.rs` 执行 manifest 中全部 fixture，检查预期 accepted/rejected、错误码、终态退出码、目录清单完整性与 Schema 文件存在性。
+- 当前共 91 个测试；`cargo fmt`、`check`、`test`、`clippy -D warnings` 与 Schema drift gate 全绿。
+
 未完成：
 - version、doctor、package manifest 的 Schema 需要 SC-P0-04 冻结对应 DTO；toolchain descriptor、capabilities 需要 SC-P0-05 确定产物结构；生成器支持一行注册新类型。
-- fixture（≥10 valid / ≥20 invalid / ≥6 golden）、`fixture-manifest.json` 与 fixture runner 待交付。
+- fixture 到 JSON Schema 的机器校验（jsonschema 之类依赖）未引入；当前 runner 走 DTO 解析/校验路径。
 
 ## 依赖
 
