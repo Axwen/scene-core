@@ -1,0 +1,15 @@
+{
+  "description": "Synthetic abnormal media generated with the pinned toolchain; no third-party or personal media.",
+  "generator": "scripts/make-media-samples.sh",
+  "samples": [
+    {"file": "baseline-cfr.mp4", "codecs": "mpeg4 + aac", "expect": "container start 0, video 0ms, audio 0ms, no rotation"},
+    {"file": "av-offset-80ms.mkv", "codecs": "mjpeg + pcm_s16le", "expect": "video start 0ms, audio start 80ms relative to the shared origin"},
+    {"file": "vfr.mkv", "codecs": "mpeg4", "expect": "variable frame intervals, start 0, no false regression"},
+    {"file": "bframes.mkv", "codecs": "mpeg4 -bf 2", "expect": "start 0, averageFrameRate 10/1, decode order does not matter"},
+    {"file": "rotation-90.mkv", "codecs": "mjpeg + display matrix", "expect": "rotationDegrees 90, display size 64x48"},
+    {"file": "attached-picture.flac", "codecs": "flac + mjpeg cover", "expect": "attachedPicture true on the video stream, primaryVideoStreamIndex null"},
+    {"file": "video-only.mkv", "codecs": "mjpeg", "expect": "one video stream, no audio stream"},
+    {"file": "audio-only.m4a", "codecs": "aac", "expect": "one audio stream, primaryVideoStreamIndex null, preview rejected"},
+    {"file": "corrupt.mp4", "codecs": "truncated mp4", "expect": "CORRUPT_MEDIA failure, no artifact"}
+  ]
+}
