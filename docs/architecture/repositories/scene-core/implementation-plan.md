@@ -32,7 +32,7 @@ Phase 0A 完成后，Phase 1 可以开始媒体 operation 的实现；但正式 
 
 ## Phase 2：Windows Host 与发布包
 
-在 `scene-seek` Tauri/Rust Host 实现输入快照、AppContainer、Job Object、stdout/stderr 排空、Artifact 二次校验、缓存租约和 `smoke`。Core 不实现这些平台职责。
+在 `scene-seek` Tauri/Rust Host 实现输入快照、AppContainer、Job Object、stdout/stderr 排空、Artifact 二次校验、缓存租约和 `smoke`。Core 不实现这些平台职责；缓存与权限边界见 [Host 集成与缓存契约](../../../specs/host-cache-contract.md)。
 
 ## Phase 3：`scene-seek` 产品闭环
 

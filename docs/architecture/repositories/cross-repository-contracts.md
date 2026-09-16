@@ -70,6 +70,10 @@ run status       ∈ {queued, running, retrying} at write gate
 
 `cancelled`、`superseded`、过期或指纹不一致的结果可以保留为历史 Artifact/事件，但不得改变当前 Evidence 可用性、索引或 Release。
 
+### 3.3 缓存契约
+
+持久缓存键固定为 `(cacheScope, derivationKey)`：`cacheScope` 至少隔离租户/用户、权限域与存储域，绝不进入引擎协议；`derivationKey` 覆盖输入、operation、有效配置、输出契约、engine cache compatibility 与 toolchain fingerprint，不含 request/source/run identity。只有完整、成功、退出码 0、Manifest/文件/hash 全校验并原子 finalize 的不可变集合可以缓存；失败、取消、超时、崩溃与 partial 产物永不命中。缓存命中必须创建新的 Run/provenance 并重新执行 current-result gate。细节见 [Host 集成与缓存契约](../specs/host-cache-contract.md)。
+
 ## 4. 媒体引擎交换协议
 
 ### 4.1 调用方式
@@ -96,51 +100,65 @@ scope: asset | query | evaluation
 
 输入只能是调用方管理的 staging handle、文件描述符或受控流引用。媒体引擎不接受任意主机路径作为长期领域字段，也不读取业务权限。
 
-所有引擎请求至少关联：
+所有引擎请求精确匹配 `engineProtocolVersion: 0.1`，并至少关联：
 
 ```text
-engineProtocolVersion
+messageType: start
 requestId
 operation
 sourceVersionId
-inputFingerprint（若调用方已知）
-engineVersion
-engineCommit
-cancellation / deadline
+inputs[]（0.1 恰好一个 source_media）
+inputFingerprint
+operationConfigHash
+outputContractVersion
+derivationKey
+executionContext（runId / generation / attempt / scope）
+deadlineMs（可选）
+options（0.1 为空对象）
 ```
 
 所有事件至少关联：
 
 ```text
+engineProtocolVersion: 0.1
+messageType: event
 requestId
-sequence
-eventType
+sourceVersionId
+inputFingerprint
+derivationKey
+operation
+sequence（accepted 从 1 开始，严格连续）
+eventType（accepted / running / progress / completed / failed / cancelled / timed_out）
+engine（完整 EngineIdentity）
+executionContext
 occurredAt
-progress（可选）
-artifactManifest（完成时）
-error（失败时使用受控错误）
+stage / completed / total（progress）
+result（completed）
+error（failed / cancelled / timed_out）
 ```
+
+engine identity 不在 StartRequest 中重复传输；Host 从 `version --json` 取得并与事件中的 `engine` 比对。
 
 `sequence` 用于去重和恢复；事件不得携带密钥、媒体二进制、完整模型输出或思维链。
 
 ### 4.3 Artifact Manifest
 
-Manifest 是交换边界，不是数据库 schema。每个 Artifact 至少表达：
+Manifest 是交换边界，不是数据库 schema。0.1 的 Manifest 携带 `manifestVersion: "0.1"`、`requestId`、`sourceVersionId`、`inputFingerprint`、`derivationKey`、`operation`、`operationConfigHash`、`outputContractVersion`、完整 `engine` identity、`toolchainFingerprint` 和有序 `artifacts[]`。每个 Artifact 至少表达：
 
 ```text
 artifactId
-kind                  # audio / frame / keyframe / thumbnail / manifest / ...
+kind                  # previewFrame（0.1 注册的预览帧）
+role                  # opening / midpoint
 mediaType
-relativeRef 或受控流引用
+relativeRef
 byteSize
 contentHash
-sourceVersionId
-startMs / endMs（适用时）
-engineVersion
-createdByRunId
+requestedTimeMs
+presentationTimeMs（可证明时，否则 null）
+pixelWidth / pixelHeight
 ```
 
-时间区间必须遵守公共 Locator 规则：`startMs >= 0`、`endMs > startMs`。引擎无法提供时间定位时必须显式缺失，不能伪造 `0..duration`。
+时间字段遵守公共 Locator 规则：公共区间 `startMs >= 0`、`endMs > startMs`；诊断预览单帧只记录请求时间与可选实际时间，不伪造区间。只有合法 `completed` 的终态 Manifest 可以注册；staged、失败、取消、超时和崩溃的产物不得发布、索引或缓存。字段事实源见 [engine-contract.md](scene-core/engine-contract.md) 与生成的 `schemas/0.1/`。
 
 ## 5. AI Adapter 契约
 
@@ -195,6 +213,8 @@ rag-core               -X-> vendor SDK
 engineProtocolVersion
 engineVersion
 engineCommit
+engineCacheCompatibilityId
+toolchainFingerprint
 ```
 
 桌面发布包固定 tag 或 commit SHA；Web 的容器镜像固定不可变 digest 或等价版本。开发环境可以使用本地路径，但 CI/发布不能依赖浮动 `main`。
@@ -223,7 +243,8 @@ engineCommit
 3. 进度单调、事件可去重、取消后不误报成功；
 4. Manifest Hash、大小、时间区间和 sourceVersion 关联；
 5. 重试/恢复时旧 generation 不写回；
-6. 同一 EvaluationDataset 上的候选、Citation 和 Temporal IoU 语义一致。
+6. 同一 EvaluationDataset 上的候选、Citation 和 Temporal IoU 语义一致；
+7. 缓存键 `(cacheScope, derivationKey)` 隔离权限域；失败/取消/超时/partial 永不命中，命中必须创建新 Run 并重跑 current-result gate。
 
 ## 8. 安全与数据边界
 
