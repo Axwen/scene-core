@@ -29,7 +29,10 @@
 - 端到端故障测试当场抓到一个真实缺陷：`implemented_operations()` 仍只报告 `probe`，导致 `extract_preview` 被 validate 拒绝（SC-P1-04 遗漏）。已修为 `[probe, extract_preview]`。
 - workspace 共 154 tests，clippy 无 allow；连续两次全量运行稳定通过。
 
-未完成：子进程树回收的深度检查（当前工具为单进程）、磁盘配额/大文件预算（SC-P1-06 性能基线）。
+未完成：
+
+- **Windows 已知问题**：`SCENE_CORE_FFMPEG_DIR` 指向空目录时，Windows 子进程以 `0xC00000FD`（栈溢出）退出；Linux 正常返回 accepted→TOOL_UNAVAILABLE。该进程测试暂限定 Unix，Windows 侧需单独排查（可能是 CLI 某处深递归或运行库差异）。
+- 子进程树回收的深度检查（当前工具为单进程）、磁盘配额/大文件预算（SC-P1-06 性能基线）。
 
 ## 依赖
 

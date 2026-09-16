@@ -647,6 +647,7 @@ fn unwritable_output_reports_resource_limit_without_artifacts() {
     let _ = std::fs::remove_dir_all(&staging);
 }
 
+#[cfg(unix)]
 #[test]
 fn missing_toolchain_still_reports_accepted_then_failed() {
     let staging =
