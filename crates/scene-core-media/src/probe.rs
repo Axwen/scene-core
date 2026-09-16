@@ -24,6 +24,7 @@ pub enum ProbeError {
     Cancelled,
     CorruptMedia,
     UnsupportedInput,
+    ResourceLimit,
     EngineInternal(&'static str),
 }
 
@@ -36,6 +37,7 @@ impl ProbeError {
             ProbeError::Cancelled => ErrorCode::Cancelled,
             ProbeError::CorruptMedia => ErrorCode::CorruptMedia,
             ProbeError::UnsupportedInput => ErrorCode::UnsupportedInput,
+            ProbeError::ResourceLimit => ErrorCode::ResourceLimit,
             ProbeError::EngineInternal(_) => ErrorCode::EngineInternal,
         }
     }
@@ -50,6 +52,7 @@ impl std::fmt::Display for ProbeError {
             ProbeError::Cancelled => "ffprobe was cancelled",
             ProbeError::CorruptMedia => "the media is corrupt or cannot be parsed",
             ProbeError::UnsupportedInput => "the media format is unsupported",
+            ProbeError::ResourceLimit => "a resource limit was reached",
             ProbeError::EngineInternal(reason) => reason,
         };
         formatter.write_str(message)
@@ -207,6 +210,9 @@ fn origin_ms(parsed: &FfprobeOutput) -> Result<Option<i64>, ProbeError> {
 
 fn classify_failure(stdout: &str, stderr: &str) -> ProbeError {
     let haystack = format!("{stdout}\n{stderr}").to_lowercase();
+    if haystack.contains("no space left") || haystack.contains("permission denied") {
+        return ProbeError::ResourceLimit;
+    }
     if haystack.contains("invalid data")
         || haystack.contains("moov atom")
         || haystack.contains("malformed")

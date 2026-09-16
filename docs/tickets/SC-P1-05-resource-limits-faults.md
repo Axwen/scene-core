@@ -18,6 +18,22 @@
 2. 超时/取消后工具进程确实被回收（无孤儿）。
 3. 失败 run 不产生可缓存集合，符合 SC-P0-07 契约。
 
+## 实现状态（2026-09-16）
+
+- 资源类失败映射：工具输出含 `no space left` 或 `permission denied` 时归类 `RESOURCE_LIMIT`（probe 与 preview 两路），错误文本仍用引擎安全消息，不泄漏原始 stderr。
+- 进程级故障测试（带锁定工具链）：
+  - `deadlineMs=1` → `timed_out`、退出 124，staging 无 output；
+  - 输出目录只读 → `failed` + `RESOURCE_LIMIT`、退出 3，且 `output/preview/opening.jpg` 不存在（部分产物隔离）；
+  - `SCENE_CORE_FFMPEG_DIR` 指向空目录 → 先 `accepted` 再 `TOOL_UNAVAILABLE`、退出 2；
+  - 取消/超时在单元层由假后端确定性覆盖（真实进程取消受竞态影响，已由 `RunControl` 单测锁定）。
+- 端到端故障测试当场抓到一个真实缺陷：`implemented_operations()` 仍只报告 `probe`，导致 `extract_preview` 被 validate 拒绝（SC-P1-04 遗漏）。已修为 `[probe, extract_preview]`。
+- workspace 共 154 tests，clippy 无 allow；连续两次全量运行稳定通过。
+
+未完成：
+
+- **Windows 已知问题**：`SCENE_CORE_FFMPEG_DIR` 指向空目录时，Windows 子进程以 `0xC00000FD`（栈溢出）退出；Linux 正常返回 accepted→TOOL_UNAVAILABLE。该进程测试暂限定 Unix，Windows 侧需单独排查（可能是 CLI 某处深递归或运行库差异）。
+- 子进程树回收的深度检查（当前工具为单进程）、磁盘配额/大文件预算（SC-P1-06 性能基线）。
+
 ## 依赖
 
 SC-P1-03、SC-P1-04。

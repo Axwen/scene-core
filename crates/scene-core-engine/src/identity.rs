@@ -8,9 +8,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 pub const ENGINE_CACHE_COMPATIBILITY_ID: &str = "scene-core-output-v1";
-/// Operations this build implements. `extract_preview` joins in SC-P1-04.
+/// Operations this build implements.
 pub fn implemented_operations() -> Vec<Operation> {
-    vec![Operation::Probe]
+    vec![Operation::Probe, Operation::ExtractPreview]
 }
 pub const TOOLCHAIN_DESCRIPTOR_FILE: &str = "toolchain-descriptor.json";
 

@@ -242,6 +242,7 @@ fn classify_preview_error(error: PreviewError, control: &RunControl) -> MediaFai
             }
         }
         PreviewError::NoVideoStream => MediaFailure::MissingVideoStream,
+        PreviewError::ResourceLimit => MediaFailure::ResourceLimit,
         PreviewError::EngineInternal(_) => MediaFailure::Internal,
     }
 }
@@ -260,6 +261,7 @@ fn classify_probe_error(error: ProbeError, control: &RunControl) -> MediaFailure
         }
         ProbeError::CorruptMedia => MediaFailure::CorruptMedia,
         ProbeError::UnsupportedInput => MediaFailure::UnsupportedInput,
+        ProbeError::ResourceLimit => MediaFailure::ResourceLimit,
         ProbeError::EngineInternal(_) => MediaFailure::Internal,
     }
 }

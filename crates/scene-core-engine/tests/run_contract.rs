@@ -12,6 +12,7 @@ use scene_core_protocol::{
     MediaType, NormalizedMedia, Operation, OperationResult, ProtocolError, RelativeRef,
     Sha256Digest, StartRequest,
 };
+use std::path::Path;
 use std::process::{Command, Stdio};
 
 fn digest(byte: u8) -> Sha256Digest {
@@ -485,5 +486,199 @@ fn probe_run_succeeds_against_staged_media() {
         validator.accept(event).expect("valid transcript");
     }
     assert!(validator.is_complete());
+    let _ = std::fs::remove_dir_all(&staging);
+}
+
+fn stage_media(bin_dir: &str, staging: &Path) {
+    use scene_core_media::toolchain::Toolchain;
+    let toolchain = Toolchain::from_bin_dir(bin_dir).expect("toolchain");
+    std::fs::create_dir_all(staging.join("input")).expect("input dir");
+    let media = staging.join("input/source.media");
+    let args: Vec<String> = [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc=duration=1:size=320x240:rate=10",
+        "-c:v",
+        "mjpeg",
+        "-f",
+        "matroska",
+        "-y",
+    ]
+    .iter()
+    .map(|flag| (*flag).to_owned())
+    .chain([media.to_string_lossy().into_owned()])
+    .collect();
+    let result = scene_core_media::process::run(&scene_core_media::process::ProcessSpec::new(
+        toolchain.ffmpeg(),
+        args,
+    ))
+    .expect("spawn");
+    assert!(result.success, "media generation failed");
+}
+
+fn live_request(operation: Operation, staging: &Path, deadline_ms: u64) -> StartRequest {
+    let input_path = staging.join("input/source.media");
+    let content_hash = scene_core_media::hash::hash_file(&input_path).expect("hash");
+    let byte_size = std::fs::metadata(&input_path).expect("metadata").len();
+    let input = InputDescriptor {
+        role: InputRole::new(InputRole::SOURCE_MEDIA).expect("role"),
+        input_ref: InputRef::new("input/source.media").expect("ref"),
+        content_hash,
+        byte_size,
+    };
+    let input_fingerprint = InputSetDescriptor::from_inputs(vec![input.clone()])
+        .input_fingerprint()
+        .expect("fingerprint");
+    let operation_config_hash = Sha256Digest::from_bytes(b"{}");
+    let derivation = DerivationDescriptor {
+        derivation_descriptor_version: DescriptorVersion::current(),
+        input_fingerprint: input_fingerprint.clone(),
+        operation,
+        operation_config_hash: operation_config_hash.clone(),
+        output_contract_version: operation.output_contract_version(),
+        engine_cache_compatibility_id: CacheCompatibilityId::new("scene-core-output-v1")
+            .expect("cache id"),
+        toolchain_fingerprint: digest(2),
+    };
+    StartRequest {
+        engine_protocol_version: scene_core_protocol::ProtocolVersion::current(),
+        message_type: scene_core_protocol::StartMessageType::Start,
+        request_id: Identifier::new("req_fault").expect("id"),
+        operation,
+        source_version_id: Identifier::new("sourcev_fault").expect("id"),
+        inputs: vec![input],
+        input_fingerprint,
+        operation_config_hash,
+        output_contract_version: operation.output_contract_version(),
+        derivation_key: derivation.derive_key().expect("key"),
+        execution_context: ExecutionContext {
+            run_id: Identifier::new("run_fault").expect("id"),
+            generation: 0,
+            attempt: 1,
+            scope: ExecutionScope::Asset,
+        },
+        deadline_ms: Some(deadline_ms),
+        options: scene_core_protocol::OperationOptions {},
+    }
+}
+
+#[test]
+fn deadline_reaps_the_tool_and_exits_124() {
+    let Ok(bin_dir) = std::env::var(scene_core_media::toolchain::ENV_FFMPEG_DIR) else {
+        eprintln!("skipping: SCENE_CORE_FFMPEG_DIR is not set");
+        return;
+    };
+    let staging =
+        std::env::temp_dir().join(format!("scene-core-fault-timeout-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&staging);
+    stage_media(&bin_dir, &staging);
+    let request = live_request(Operation::Probe, &staging, 1);
+    let fingerprint = digest(2).as_str().to_owned();
+    let (exit_code, stdout, _) = run_binary(
+        &["run", "--staging-root", staging.to_str().expect("utf-8")],
+        Some(&serde_json::to_string(&request).expect("serialize")),
+        &[
+            ("SCENE_CORE_FFMPEG_DIR", &bin_dir),
+            ("SCENE_CORE_TOOLCHAIN_FINGERPRINT", &fingerprint),
+        ],
+    );
+    assert_eq!(exit_code, 124, "stdout: {stdout}");
+    let events: Vec<EventEnvelope> = stdout
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("event JSON"))
+        .collect();
+    assert_eq!(
+        events.last().expect("terminal").event_type,
+        EventType::TimedOut
+    );
+    assert!(!staging.join("output").exists());
+    let _ = std::fs::remove_dir_all(&staging);
+}
+
+#[cfg(unix)]
+#[test]
+fn unwritable_output_reports_resource_limit_without_artifacts() {
+    let Ok(bin_dir) = std::env::var(scene_core_media::toolchain::ENV_FFMPEG_DIR) else {
+        eprintln!("skipping: SCENE_CORE_FFMPEG_DIR is not set");
+        return;
+    };
+    let staging =
+        std::env::temp_dir().join(format!("scene-core-fault-disk-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&staging);
+    stage_media(&bin_dir, &staging);
+    let preview_dir = staging.join("output/preview");
+    std::fs::create_dir_all(&preview_dir).expect("preview dir");
+    let mut permissions = std::fs::metadata(&preview_dir)
+        .expect("metadata")
+        .permissions();
+    std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o555);
+    std::fs::set_permissions(&preview_dir, permissions).expect("read-only");
+
+    let request = live_request(Operation::ExtractPreview, &staging, 60_000);
+    let fingerprint = digest(2).as_str().to_owned();
+    let (exit_code, stdout, stderr) = run_binary(
+        &["run", "--staging-root", staging.to_str().expect("utf-8")],
+        Some(&serde_json::to_string(&request).expect("serialize")),
+        &[
+            ("SCENE_CORE_FFMPEG_DIR", &bin_dir),
+            ("SCENE_CORE_TOOLCHAIN_FINGERPRINT", &fingerprint),
+        ],
+    );
+    assert_eq!(exit_code, 3, "stdout: {stdout} stderr: {stderr}");
+    let events: Vec<EventEnvelope> = stdout
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("event JSON"))
+        .collect();
+    let terminal = events.last().expect("terminal");
+    assert_eq!(terminal.event_type, EventType::Failed);
+    let error = terminal.error.as_ref().expect("error");
+    assert_eq!(error.code, ErrorCode::ResourceLimit);
+    assert!(!staging.join("output/preview/opening.jpg").exists());
+
+    let mut permissions = std::fs::metadata(&preview_dir)
+        .expect("metadata")
+        .permissions();
+    std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o755);
+    std::fs::set_permissions(&preview_dir, permissions).expect("restore");
+    let _ = std::fs::remove_dir_all(&staging);
+}
+
+#[cfg(unix)]
+#[test]
+fn missing_toolchain_still_reports_accepted_then_failed() {
+    let staging =
+        std::env::temp_dir().join(format!("scene-core-fault-tool-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&staging);
+    std::fs::create_dir_all(staging.join("input")).expect("input dir");
+    let media = staging.join("input/source.media");
+    std::fs::write(&media, b"staged bytes").expect("stage");
+    let request = live_request(Operation::Probe, &staging, 60_000);
+    let fingerprint = digest(2).as_str().to_owned();
+    let empty_dir = staging.join("empty-bin");
+    std::fs::create_dir_all(&empty_dir).expect("empty bin");
+    let (exit_code, stdout, _) = run_binary(
+        &["run", "--staging-root", staging.to_str().expect("utf-8")],
+        Some(&serde_json::to_string(&request).expect("serialize")),
+        &[
+            ("SCENE_CORE_FFMPEG_DIR", empty_dir.to_str().expect("utf-8")),
+            ("SCENE_CORE_TOOLCHAIN_FINGERPRINT", &fingerprint),
+        ],
+    );
+    assert_eq!(exit_code, 2);
+    let events: Vec<EventEnvelope> = stdout
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("event JSON"))
+        .collect();
+    assert_eq!(events[0].event_type, EventType::Accepted);
+    let terminal = events.last().expect("terminal");
+    assert_eq!(terminal.event_type, EventType::Failed);
+    assert_eq!(
+        terminal.error.as_ref().expect("error").code,
+        ErrorCode::ToolUnavailable
+    );
     let _ = std::fs::remove_dir_all(&staging);
 }
