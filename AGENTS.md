@@ -51,5 +51,5 @@ PR 应说明目的、协议或行为变化、验证命令及兼容性影响；�
 
 ### Domain docs
 
-单 context：仓库根目录的 `CONTEXT.md` 与 `docs/adr/`。详见 `docs/agents/domain.md`。
+单 context：仓库根目录的 `CONTEXT.md` 与 `docs/adr/`（现有 ADR：[ADR-0001](docs/adr/0001-windows-toolchain-license.md)）。详见 `docs/agents/domain.md`。
 

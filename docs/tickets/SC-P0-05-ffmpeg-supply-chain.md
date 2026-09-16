@@ -26,7 +26,7 @@
 
 需要用户/法律确认：
 
-- 该候选构建使用 `--enable-version3`，实际许可档位是 **LGPL-3.0-or-later**（不是 package manifest 示例中的 LGPL-2.1-or-later）。仍属 LGPL、无 GPL/nonfree 组件。当前定位为内部使用：不对外分发时差异不产生额外义务；对外分发（客户/合作方/公开发布 bundle 或镜像归档）前需法律确认，或改为自建 `--disable-version3` 构建。
+- 该候选构建使用 `--enable-version3`，实际许可档位是 **LGPL-3.0-or-later**（不是 package manifest 示例中的 LGPL-2.1-or-later）。仍属 LGPL、无 GPL/nonfree 组件。决策与复审门禁已记入 [ADR-0001](../../adr/0001-windows-toolchain-license.md)：当前内部使用；对外分发前由用户/法律确认或切换自建 `--disable-version3` 构建。
 
 未完成：
 

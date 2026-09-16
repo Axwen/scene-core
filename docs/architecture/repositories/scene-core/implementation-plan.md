@@ -1,6 +1,6 @@
 # `scene-core` 落地计划
 
-> 状态：2026-09-16；已有 Rust workspace 和 CI 配置骨架；Protocol 0.1 DTO、严格解析、输入/派生身份、事件状态机和已确认时间规则的纯转换已在 `crates/scene-core-protocol` 实现并通过 workspace 检查，Schema、fixture、`version`/`doctor` 与媒体运行时尚未实现。工程骨架的历史本地检查通过不代表跨平台验收完成。新增媒体扩展方向已获用户确认，详见 [增量工程审查](media-extension-review.md)。
+> 状态：2026-09-16；Phase 0A 完成（协议 DTO/解析/身份/时间转换、14 个生成式 Schema、73 个 fixture、`version`/`doctor`）；Phase 0B 完成（供应链 lock 与校验、Windows bundle 打包/PE 扫描/确定性 ZIP/冒烟、干净 Windows 实测）；媒体运行时（Phase 1）尚未实现，Phase 1 tickets 待创建。剩余门禁：对外分发前的许可复审与聚焦 Eng Review。工程骨架的历史本地检查通过不代表跨平台验收完成。新增媒体扩展方向已获用户确认，详见 [增量工程审查](media-extension-review.md)。
 
 ## 结论
 
