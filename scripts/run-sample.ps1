@@ -55,7 +55,6 @@ $request = [ordered]@{
 Write-Output "== $Operation"
 $request | & $engine run --staging-root $work
 $exit = $LASTEXITCODE
-$events = & $engine version --json > $null; # no-op keep strict mode happy
 Write-Output "exit=$exit"
 Get-ChildItem -Recurse -File -Path (Join-Path $work "output") -ErrorAction SilentlyContinue |
     ForEach-Object { Write-Output ("artifact {0} {1} bytes" -f $_.FullName.Substring($work.Length + 1), $_.Length) }
