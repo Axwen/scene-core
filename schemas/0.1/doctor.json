@@ -61,6 +61,7 @@
         "TRUST_ANCHOR_MISSING",
         "MANIFEST_DIGEST_MISMATCH",
         "BUNDLE_FILE_INVALID",
+        "TOOLCHAIN_DESCRIPTOR_INVALID",
         "ENGINE_EXECUTABLE_INVALID",
         "ENGINE_VERSION_MISMATCH",
         "TOOL_EXECUTABLE_INVALID",
@@ -186,14 +187,20 @@
       "$ref": "#/$defs/DoctorStatus"
     },
     "toolchain": {
-      "$ref": "#/$defs/ToolchainIdentity"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ToolchainIdentity"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": [
     "schemaVersion",
     "status",
     "engine",
-    "toolchain",
     "checks"
   ],
   "title": "DoctorOutput",

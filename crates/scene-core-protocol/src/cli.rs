@@ -4,7 +4,7 @@
 //! writes exactly one JSON object to stdout; doctor failures map to a stable
 //! non-zero exit code derived from the first failed check.
 
-use crate::error::{ValidationError, validate_safe_text};
+use crate::error::{ErrorCode, ValidationError, validate_safe_text};
 use crate::identity::{EngineIdentity, ToolchainIdentity, validate_target, validate_unique};
 use crate::operation::Operation;
 use crate::values::{
@@ -80,6 +80,7 @@ pub enum DoctorCheckCode {
     TrustAnchorMissing,
     ManifestDigestMismatch,
     BundleFileInvalid,
+    ToolchainDescriptorInvalid,
     EngineExecutableInvalid,
     EngineVersionMismatch,
     ToolExecutableInvalid,
@@ -180,14 +181,23 @@ pub struct DoctorOutput {
     pub schema_version: DescriptorVersion,
     pub status: DoctorStatus,
     pub engine: EngineIdentity,
-    pub toolchain: ToolchainIdentity,
+    pub toolchain: Option<ToolchainIdentity>,
     pub checks: Vec<DoctorCheck>,
 }
 
 impl DoctorOutput {
     pub fn validate(&self) -> Result<(), ValidationError> {
         self.engine.validate()?;
-        self.toolchain.validate()?;
+        match (&self.toolchain, self.status) {
+            (Some(toolchain), _) => toolchain.validate()?,
+            (None, DoctorStatus::Ok) => {
+                return Err(ValidationError::new(
+                    "toolchain",
+                    "must be present when every check passed",
+                ));
+            }
+            (None, DoctorStatus::Failed) => {}
+        }
         if self.checks.is_empty() {
             return Err(ValidationError::new("checks", "must not be empty"));
         }
@@ -227,6 +237,34 @@ impl DoctorOutput {
             .and_then(|check| check.code)
             .map(DoctorCheckCode::exit_code)
             .unwrap_or(0)
+    }
+}
+
+/// Controlled diagnostic failure for the standalone CLI. The engine writes
+/// exactly one such object to stdout when it cannot produce a normal command
+/// output, then exits non-zero.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct CliErrorOutput {
+    pub schema_version: DescriptorVersion,
+    pub code: ErrorCode,
+    pub message: String,
+    pub next_step: String,
+}
+
+impl CliErrorOutput {
+    pub fn new(code: ErrorCode, message: impl Into<String>, next_step: impl Into<String>) -> Self {
+        Self {
+            schema_version: DescriptorVersion::current(),
+            code,
+            message: message.into(),
+            next_step: next_step.into(),
+        }
+    }
+
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        validate_safe_text("message", &self.message, 1024)?;
+        validate_safe_text("nextStep", &self.next_step, 1024)
     }
 }
 
@@ -286,7 +324,7 @@ mod tests {
             schema_version: DescriptorVersion::current(),
             status: DoctorStatus::Ok,
             engine: engine(),
-            toolchain: toolchain(),
+            toolchain: Some(toolchain()),
             checks: vec![DoctorCheck::ok(check_name("package-manifest"), "readable")],
         };
         assert!(ok.validate().is_ok());
@@ -310,7 +348,7 @@ mod tests {
             schema_version: DescriptorVersion::current(),
             status: DoctorStatus::Failed,
             engine: engine(),
-            toolchain: toolchain(),
+            toolchain: Some(toolchain()),
             checks: vec![failed.clone()],
         };
         assert!(output.validate().is_ok());
@@ -328,7 +366,7 @@ mod tests {
             schema_version: DescriptorVersion::current(),
             status: DoctorStatus::Failed,
             engine: engine(),
-            toolchain: toolchain(),
+            toolchain: Some(toolchain()),
             checks: vec![DoctorCheck::failed(
                 check_name("temp-dir"),
                 DoctorCheckCode::TempDirUnavailable,

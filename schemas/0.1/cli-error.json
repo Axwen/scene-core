@@ -1,0 +1,56 @@
+{
+  "$defs": {
+    "DescriptorVersion": {
+      "description": "Frozen descriptor schema revision. Protocol 0.1 registers only `\"1\"` for\nboth `inputSetVersion` and `derivationDescriptorVersion`.",
+      "enum": [
+        "1"
+      ],
+      "type": "string"
+    },
+    "ErrorCode": {
+      "description": "Frozen Protocol 0.1 error codes.",
+      "enum": [
+        "INVALID_REQUEST",
+        "UNSUPPORTED_PROTOCOL",
+        "OPERATION_UNAVAILABLE",
+        "INPUT_NOT_FOUND",
+        "INPUT_CHANGED",
+        "UNSUPPORTED_INPUT",
+        "CORRUPT_MEDIA",
+        "MISSING_VIDEO_STREAM",
+        "RESOURCE_LIMIT",
+        "TOOL_UNAVAILABLE",
+        "TOOL_FAILED",
+        "TIMEOUT",
+        "CANCELLED",
+        "ENGINE_INTERNAL"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Controlled diagnostic failure for the standalone CLI. The engine writes\nexactly one such object to stdout when it cannot produce a normal command\noutput, then exits non-zero.",
+  "properties": {
+    "code": {
+      "$ref": "#/$defs/ErrorCode"
+    },
+    "message": {
+      "type": "string"
+    },
+    "nextStep": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "$ref": "#/$defs/DescriptorVersion"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "code",
+    "message",
+    "nextStep"
+  ],
+  "title": "CliErrorOutput",
+  "type": "object"
+}

@@ -26,7 +26,9 @@ pub mod time;
 pub mod values;
 
 pub use canonical::{CanonicalJsonError, canonical_sha256, to_canonical_json};
-pub use cli::{DoctorCheck, DoctorCheckCode, DoctorOutput, DoctorStatus, VersionOutput};
+pub use cli::{
+    CliErrorOutput, DoctorCheck, DoctorCheckCode, DoctorOutput, DoctorStatus, VersionOutput,
+};
 pub use control::{
     CancelMessageType, CancelRequest, ControlMessage, ControlStreamValidator, DEFAULT_DEADLINE_MS,
     MAX_DEADLINE_MS, StartMessageType, StartRequest, parse_control_line,

@@ -8,9 +8,9 @@
 //! ```
 
 use scene_core_protocol::{
-    ArtifactManifest, CancelRequest, DerivationDescriptor, DoctorOutput, EngineIdentity,
-    EventEnvelope, InputSetDescriptor, NormalizedMedia, PackageManifest, StartRequest,
-    TemporalSegment, ToolchainIdentity, VersionOutput,
+    ArtifactManifest, CancelRequest, CliErrorOutput, DerivationDescriptor, DoctorOutput,
+    EngineIdentity, EventEnvelope, InputSetDescriptor, NormalizedMedia, PackageManifest,
+    StartRequest, TemporalSegment, ToolchainIdentity, VersionOutput,
 };
 use serde_json::Value;
 use std::fs;
@@ -35,6 +35,7 @@ fn schema_value<T: schemars::JsonSchema>() -> Value {
 fn generated_schemas() -> Vec<(&'static str, Value)> {
     let mut schemas = vec![
         ("artifact-manifest.json", schema_value::<ArtifactManifest>()),
+        ("cli-error.json", schema_value::<CliErrorOutput>()),
         (
             "control-message.json",
             schema_value::<ControlMessageSchema>(),

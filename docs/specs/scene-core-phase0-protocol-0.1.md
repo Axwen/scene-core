@@ -477,6 +477,8 @@ scene-core doctor --json [--bundle-root <path>]
 
 `doctor --json` 输出 `schemaVersion`、整体 `ok | failed`、上述 engine identity、tool identity 和有序 checks。每个 check 包含 `name`、`status`、`code`、安全 `message` 和 `nextStep`。
 
+`doctor` 通过 `--trusted-manifest-sha256 <sha256:...>` 接收包外可信 manifest digest；缺失或与包内 manifest 不符时信任检查失败，绝不以包内 manifest 自证。检查顺序固定，首个失败即停止：package-manifest、manifest-trust-anchor、toolchain-descriptor、bundle-files、engine-executable、engine-version、tool-executables、tool-versions、capabilities、temp-dir。成功退出码 0；失败取首个失败 check 的稳定 code 对应退出码（`TEMP_DIR_UNAVAILABLE` 为 3，其余为 2）。CLI 无法产生正常输出时向 stdout 输出单个 `CliErrorOutput` 对象并使用错误码矩阵的退出码。
+
 必查项：package manifest 可读、所有列出文件 size/hash 匹配、FFmpeg/FFprobe 仅从 bundle 相对路径解析、二进制可启动、报告版本与 package manifest 匹配、目标 codecs/demuxers 可列出、临时目录可创建和删除。Phase 0 不提供正式 `smoke` 命令。
 
 ### 11. FFmpeg Supply Chain and License Policy

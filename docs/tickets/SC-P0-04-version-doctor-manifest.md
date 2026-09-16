@@ -26,9 +26,17 @@
 - 新增严格字符串类型 `ToolName`、`LicenseExpression`、`DoctorCheckName`；测试总数 100。
 - doctor 退出码约定：成功 0，失败取首个失败 check 的 `DoctorCheckCode` 退出码（`TEMP_DIR_UNAVAILABLE` 为 3，其余为 2）。
 
+增量二（2026-09-16，engine CLI）：
+
+- `scene-core-engine` 新增 lib + `[[bin]] name = "scene-core"`：`scene-core version --json`、`scene-core doctor --json [--bundle-root <path>] [--trusted-manifest-sha256 <digest>]`；stdout 恰好一个 JSON object，退出码与错误码/检查码矩阵一致。
+- `version` 从可执行文件同目录读取 `toolchain-descriptor.json`；不可读时输出单个 `CliErrorOutput`（`TOOL_UNAVAILABLE`）并以 2 退出。
+- `doctor` 顺序检查并在首个失败处停止：package-manifest、manifest-trust-anchor（缺失或与包外 digest 不符即失败）、toolchain-descriptor、bundle-files（size/hash/缺失/未列出文件）、engine-executable、engine-version、tool-executables、tool-versions、capabilities、temp-dir；真实工具执行走可注入 `CommandRunner`，测试使用假 runner。
+- 新增 `CliErrorOutput` 与 `cli-error.json` Schema（共 13 个）；engine 侧 10 个测试覆盖健康 bundle、篡改/缺失/未列出文件、信任锚、工具与能力失败；测试总数 110。
+- `doctor` 退出码：成功 0，失败取首个失败 check 的 code（`TEMP_DIR_UNAVAILABLE` 为 3，其余为 2）。
+
 未完成：
 
-- engine crate 的 `version`/`doctor` CLI、合成 bundle fixture 与命令执行抽象；包外信任锚（manifest digest）与真实 FFmpeg/FFprobe 启动、DLL closure 验证依赖 SC-P0-05/06。
+- 真实 FFmpeg/FFprobe 启动、DLL closure、capabilities 与 `-buildconf` 比对验证依赖 SC-P0-05/06；`capabilities.json` 当前只做结构检查（五个能力列表）。
 
 ## 依赖
 

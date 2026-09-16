@@ -1,6 +1,6 @@
 # 素材时间规则
 
-状态：用户已确认，作为候选 Protocol 0.1 的规范性补充；保留原文件路径以避免链接失效。规则已确定；Phase 0 纯转换与 DTO 校验已在 `crates/scene-core-protocol` 实现（`tests/media_time_contract.rs` 通过，共 100 个用例），fixture、Schema 和真实媒体验证尚未完成。
+状态：用户已确认，作为候选 Protocol 0.1 的规范性补充；保留原文件路径以避免链接失效。规则已确定；Phase 0 纯转换与 DTO 校验已在 `crates/scene-core-protocol` 实现（`tests/media_time_contract.rs` 通过，共 110 个用例），fixture、Schema 和真实媒体验证尚未完成。
 
 ## 目的与边界
 
