@@ -36,3 +36,24 @@
 - Linux CI 通过格式、编译、测试、lint 和 Schema drift；Windows CI 完成 bundle 验证；fixture manifest、错误矩阵和 CLI 输出契约可独立复核。
 - 所有协议、输入身份、缓存和供应链 fixture 可被陌生实现者直接使用。
 - 聚焦 Eng Review 无阻断项；不因本 Epic 触发 Design Review。
+
+## 结项状态（2026-09-16）
+
+| Ticket | 实现 | 证据 |
+|---|---|---|
+| SC-P0-01 workspace/toolchain/CI | 完成 | Linux/Windows CI 全绿；toolchain 固定 1.85.1 |
+| SC-P0-02 DTO/身份/时间/seam | 完成 | 113 个测试；media_time/user 规则向量；derivation golden |
+| SC-P0-03 Schema/fixture/runner | 完成 | 14 个生成式 Schema + drift gate；73 fixture（16 valid / 49 invalid / 8 golden）+ manifest runner；transcript 状态机 |
+| SC-P0-04 version/doctor/manifest | 完成 | `version --json`/`doctor --json` 契约与实测；package manifest 校验 |
+| SC-P0-05 供应链 | 完成（许可门禁另记） | lock（来源/size/SHA-256/source/flags/closure/fingerprint）、verify 脚本、策略文档、能力基线 364/538/228/531/44；[ADR-0001](../adr/0001-windows-toolchain-license.md) |
+| SC-P0-06 Windows bundle | 完成 | CI 组包+PE 扫描+buildconf+双 ZIP 确定性+冒烟；用户干净 Windows 11 正向与四条负向实测通过；detached checksum |
+| SC-P0-07 Host/cache 契约 | 完成 | host-cache-contract.md + 跨仓库/职责/引擎契约同步 |
+
+聚合证据：main 分支最近 100 次 CI run 无失败；bundle 工件名 `scene-core-0.1.0-alpha.1-windows-x86_64.zip`。
+
+### 仍然开放（不阻塞 P0 结项）
+
+1. **对外分发前的许可复审**：接受 LGPL-3.0-or-later 或切自建 `--disable-version3`（ADR-0001 复审门禁）。
+2. 静态 CRT 新构件建议在干净 Windows 上重跑一次 `version`/`doctor` 正向命令留档。
+3. 聚焦 Eng Review：本 Epic 完成定义要求无阻断项；建议由用户按既有审查流程执行（可基于本表证据复核）。
+4. Phase 1 tickets 尚未创建（下一步）。
