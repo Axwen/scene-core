@@ -18,6 +18,17 @@
 3. 无 GPL/nonfree 组件、PATH 依赖、管理员权限要求或未记录的动态库。
 4. bundle provenance 能回指精确版本、来源 hash、configure flags、能力清单和许可材料。
 
+## 实现状态（2026-09-16，增量一：descriptor 与 fingerprint 链路）
+
+- 新增 `ToolchainDescriptor`/`ToolchainLibrary` DTO（协议 crate）：bundle 内 `toolchain-descriptor.json` 携带 target、FFmpeg/FFprobe 版本、lock 文件 SHA-256、configure flags（校验拒绝 `--enable-gpl`/`--enable-nonfree`）、能力集摘要和 DLL closure。
+- `toolchainFingerprint` 重新定义为 **descriptor 文件字节的 SHA-256**，descriptor 自身不含该字段，任何人可独立复算；engine `read_toolchain_identity` 由 descriptor 派生共享 `ToolchainIdentity`。
+- doctor 新增能力摘要校验：`capabilities.json` 的文件摘要必须等于 descriptor 记录的 `capabilitySetFingerprint`。
+- Schema 增至 14 个（新增 `toolchain-descriptor.json`）；engine 合成 bundle 测试已改用 descriptor。
+
+未完成（增量二）：
+
+- Windows CI 的打包脚本（组装 bundle、生成 capabilities/SBOM/package-manifest、detached checksum）、PE import/DLL closure 扫描和干净环境 `version`/`doctor` 负向测试；真实工具能力基线与 SBOM 需在 Windows 运行后入库。
+
 ## 依赖
 
 SC-P0-04、SC-P0-05。

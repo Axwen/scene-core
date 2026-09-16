@@ -1,7 +1,8 @@
 //! Engine-side identity constants and bundle toolchain discovery.
 
 use scene_core_protocol::{
-    CacheCompatibilityId, CommitHash, EngineIdentity, Operation, ProtocolVersion, ToolchainIdentity,
+    CacheCompatibilityId, CommitHash, EngineIdentity, Operation, ProtocolVersion,
+    ToolchainDescriptor, ToolchainIdentity,
 };
 use std::fs;
 use std::path::Path;
@@ -26,15 +27,16 @@ pub fn engine_identity() -> EngineIdentity {
     }
 }
 
-/// Reads the shared toolchain descriptor shipped next to the engine.
+/// Reads the toolchain descriptor shipped next to the engine and derives the
+/// shared identity. The fingerprint is the SHA-256 of the exact file bytes.
 pub fn read_toolchain_identity(bundle_root: &Path) -> Result<ToolchainIdentity, String> {
     let path = bundle_root.join(TOOLCHAIN_DESCRIPTOR_FILE);
-    let text = fs::read_to_string(&path)
-        .map_err(|_| format!("{TOOLCHAIN_DESCRIPTOR_FILE} could not be read"))?;
-    let identity: ToolchainIdentity = serde_json::from_str(&text)
+    let bytes =
+        fs::read(&path).map_err(|_| format!("{TOOLCHAIN_DESCRIPTOR_FILE} could not be read"))?;
+    let descriptor: ToolchainDescriptor = serde_json::from_slice(&bytes)
         .map_err(|_| format!("{TOOLCHAIN_DESCRIPTOR_FILE} is not a valid toolchain descriptor"))?;
-    identity
+    descriptor
         .validate()
         .map_err(|error| format!("{TOOLCHAIN_DESCRIPTOR_FILE} is invalid: {error}"))?;
-    Ok(identity)
+    Ok(descriptor.to_identity(ToolchainDescriptor::fingerprint(&bytes)))
 }

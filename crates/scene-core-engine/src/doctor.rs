@@ -186,7 +186,12 @@ pub fn run_doctor(request: DoctorRequest<'_>) -> DoctorOutput {
         "every bundled tool reports the recorded version",
     ));
 
-    if let Err(check) = check_capabilities(request.bundle_root, &manifest) {
+    let capability_fingerprint = toolchain
+        .as_ref()
+        .map(|identity| identity.capability_set_fingerprint.clone())
+        .expect("toolchain identity is present before the capabilities check");
+    if let Err(check) = check_capabilities(request.bundle_root, &manifest, &capability_fingerprint)
+    {
         checks.push(check);
         return finish(engine, toolchain, checks);
     }
@@ -351,7 +356,11 @@ fn collect_files(root: &Path, dir: &Path, files: &mut BTreeSet<String>) -> std::
     Ok(())
 }
 
-fn check_capabilities(root: &Path, manifest: &PackageManifest) -> Result<(), DoctorCheck> {
+fn check_capabilities(
+    root: &Path,
+    manifest: &PackageManifest,
+    expected_fingerprint: &Sha256Digest,
+) -> Result<(), DoctorCheck> {
     let path = root.join(manifest.capabilities_ref.as_str());
     let bytes = fs::read(&path).map_err(|_| {
         failure(
@@ -360,6 +369,13 @@ fn check_capabilities(root: &Path, manifest: &PackageManifest) -> Result<(), Doc
             "capabilities.json could not be read",
         )
     })?;
+    if Sha256Digest::from_bytes(&bytes) != *expected_fingerprint {
+        return Err(failure(
+            "capabilities",
+            DoctorCheckCode::CapabilitiesInvalid,
+            "capabilities.json does not match the digest recorded in the toolchain descriptor",
+        ));
+    }
     let value: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| {
         failure(
             "capabilities",

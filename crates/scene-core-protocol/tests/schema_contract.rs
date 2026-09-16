@@ -10,7 +10,7 @@
 use scene_core_protocol::{
     ArtifactManifest, CancelRequest, CliErrorOutput, DerivationDescriptor, DoctorOutput,
     EngineIdentity, EventEnvelope, InputSetDescriptor, NormalizedMedia, PackageManifest,
-    StartRequest, TemporalSegment, ToolchainIdentity, VersionOutput,
+    StartRequest, TemporalSegment, ToolchainDescriptor, ToolchainIdentity, VersionOutput,
 };
 use serde_json::Value;
 use std::fs;
@@ -54,6 +54,10 @@ fn generated_schemas() -> Vec<(&'static str, Value)> {
         ("normalized-media.json", schema_value::<NormalizedMedia>()),
         ("package-manifest.json", schema_value::<PackageManifest>()),
         ("temporal-segment.json", schema_value::<TemporalSegment>()),
+        (
+            "toolchain-descriptor.json",
+            schema_value::<ToolchainDescriptor>(),
+        ),
         (
             "toolchain-identity.json",
             schema_value::<ToolchainIdentity>(),

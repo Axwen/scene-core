@@ -36,7 +36,10 @@ pub use control::{
 pub use error::{ErrorCode, ProtocolError, ProtocolResult, TerminalKind, ValidationError};
 pub use event::{EventEnvelope, EventMessageType, EventStreamValidator, EventType};
 pub use execution::{ExecutionContext, ExecutionScope};
-pub use identity::{DerivationDescriptor, DerivationIdentity, EngineIdentity, ToolchainIdentity};
+pub use identity::{
+    DerivationDescriptor, DerivationIdentity, EngineIdentity, ToolchainDescriptor,
+    ToolchainIdentity, ToolchainLibrary,
+};
 pub use input::{
     InputDescriptor, InputSetDescriptor, MAX_INPUT_BYTE_SIZE, StagedSourceFacts,
     verify_input_fingerprint, verify_staged_source,

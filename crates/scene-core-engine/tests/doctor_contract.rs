@@ -6,7 +6,7 @@ use scene_core_engine::runner::{CommandOutput, CommandRunner};
 use scene_core_protocol::{
     CacheCompatibilityId, DoctorCheck, DoctorCheckCode, DoctorOutput, DoctorStatus,
     LicenseExpression, PackageManifest, PackagedEngine, PackagedFile, PackagedTool,
-    ProtocolVersion, RelativeRef, Sha256Digest, ToolName, ToolchainIdentity,
+    ProtocolVersion, RelativeRef, Sha256Digest, ToolName, ToolchainDescriptor, ToolchainLibrary,
 };
 use std::collections::HashMap;
 use std::fs;
@@ -94,34 +94,50 @@ fn build_bundle(name: &str) -> Bundle {
     fs::create_dir_all(&root).expect("create bundle root");
 
     let engine = engine_identity();
-    let toolchain_fingerprint = digest('a');
+    let avcodec = write(&root, "bin/avcodec-63.dll", b"avcodec-dll");
+    let avutil = write(&root, "bin/avutil-61.dll", b"avutil-dll");
     let mut files = vec![
         write(&root, "SBOM.spdx.json", b"{\"spdxVersion\":\"SPDX-2.3\"}"),
-        write(&root, "THIRD_PARTY_LICENSES/LICENSE.ffmpeg", b"LGPL"),
+        write(&root, "THIRD_PARTY_LICENSES/LICENSE.ffmpeg", b"LICENSE"),
+        avcodec.clone(),
+        avutil.clone(),
         write(&root, "bin/ffmpeg.exe", b"ffmpeg-binary"),
         write(&root, "bin/ffprobe.exe", b"ffprobe-binary"),
         write(&root, "bin/scene-core.exe", b"engine-binary"),
-        write(
-            &root,
-            "capabilities.json",
-            br#"{"demuxers":["matroska"],"decoders":["h264"],"encoders":["mjpeg"],"filters":["scale"],"protocols":["file"]}"#,
-        ),
     ];
-    let toolchain = ToolchainIdentity {
-        toolchain_fingerprint: toolchain_fingerprint.clone(),
+    let capabilities_bytes = br#"{"capabilitiesVersion":"1","target":"x86_64-pc-windows-msvc","demuxers":["matroska"],"decoders":["h264"],"encoders":["mjpeg"],"filters":["scale"],"protocols":["file"]}"#.to_vec();
+    let capability_set_fingerprint = Sha256Digest::from_bytes(&capabilities_bytes);
+    files.push(write(&root, "capabilities.json", &capabilities_bytes));
+
+    let descriptor = ToolchainDescriptor {
+        descriptor_version: scene_core_protocol::DescriptorVersion::current(),
         target: engine.target.clone(),
         ffmpeg_version: "7.1.1".to_owned(),
         ffprobe_version: "7.1.1".to_owned(),
-        capability_set_fingerprint: digest('b'),
+        toolchain_lock_sha256: digest('9'),
+        configure_flags: vec!["--enable-version3".to_owned(), "--enable-shared".to_owned()],
+        capability_set_fingerprint,
+        shared_libraries: vec![
+            ToolchainLibrary {
+                path: RelativeRef::new("bin/avcodec-63.dll").expect("ref"),
+                sha256: avcodec.sha256.clone(),
+            },
+            ToolchainLibrary {
+                path: RelativeRef::new("bin/avutil-61.dll").expect("ref"),
+                sha256: avutil.sha256.clone(),
+            },
+        ],
     };
-    let toolchain_bytes = serde_json::to_vec_pretty(&toolchain).expect("toolchain serializes");
-    files.push(write(&root, "toolchain-descriptor.json", &toolchain_bytes));
+    descriptor.validate().expect("fixture descriptor is valid");
+    let descriptor_bytes = serde_json::to_vec_pretty(&descriptor).expect("descriptor serializes");
+    files.push(write(&root, "toolchain-descriptor.json", &descriptor_bytes));
     files.sort_by(|left, right| {
         left.path
             .as_str()
             .as_bytes()
             .cmp(right.path.as_str().as_bytes())
     });
+    let toolchain_fingerprint = ToolchainDescriptor::fingerprint(&descriptor_bytes);
 
     let manifest = PackageManifest {
         package_manifest_version: scene_core_protocol::DescriptorVersion::current(),
@@ -326,16 +342,22 @@ fn unreadable_and_invalid_manifests_fail_early() {
 #[test]
 fn toolchain_descriptor_must_match_the_manifest() {
     let bundle = build_bundle("toolchain-mismatch");
-    let descriptor = scene_core_protocol::ToolchainIdentity {
-        toolchain_fingerprint: digest('c'),
+    let replacement = ToolchainDescriptor {
+        descriptor_version: scene_core_protocol::DescriptorVersion::current(),
         target: engine_identity().target,
-        ffmpeg_version: "7.1.1".to_owned(),
-        ffprobe_version: "7.1.1".to_owned(),
+        ffmpeg_version: "6.0".to_owned(),
+        ffprobe_version: "6.0".to_owned(),
+        toolchain_lock_sha256: digest('9'),
+        configure_flags: vec!["--enable-shared".to_owned()],
         capability_set_fingerprint: digest('d'),
+        shared_libraries: vec![ToolchainLibrary {
+            path: RelativeRef::new("bin/avcodec-63.dll").expect("ref"),
+            sha256: digest('1'),
+        }],
     };
     fs::write(
         bundle.root.join("toolchain-descriptor.json"),
-        serde_json::to_vec(&descriptor).expect("serialize"),
+        serde_json::to_vec_pretty(&replacement).expect("serialize"),
     )
     .expect("write descriptor");
     let runner = healthy_runner();

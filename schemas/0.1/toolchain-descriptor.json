@@ -1,0 +1,83 @@
+{
+  "$defs": {
+    "DescriptorVersion": {
+      "description": "Frozen descriptor schema revision. Protocol 0.1 registers only `\"1\"` for\nboth `inputSetVersion` and `derivationDescriptorVersion`.",
+      "enum": [
+        "1"
+      ],
+      "type": "string"
+    },
+    "RelativeRef": {
+      "maxLength": 1024,
+      "minLength": 1,
+      "type": "string"
+    },
+    "Sha256Digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "ToolchainLibrary": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/RelativeRef"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Digest"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Platform toolchain file shipped inside the bundle. Its SHA-256 over the\nexact file bytes is the `toolchainFingerprint`; the descriptor itself never\ncarries that fingerprint, so it stays verifiable from the file.",
+  "properties": {
+    "capabilitySetFingerprint": {
+      "$ref": "#/$defs/Sha256Digest"
+    },
+    "configureFlags": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "descriptorVersion": {
+      "$ref": "#/$defs/DescriptorVersion"
+    },
+    "ffmpegVersion": {
+      "type": "string"
+    },
+    "ffprobeVersion": {
+      "type": "string"
+    },
+    "sharedLibraries": {
+      "items": {
+        "$ref": "#/$defs/ToolchainLibrary"
+      },
+      "type": "array"
+    },
+    "target": {
+      "type": "string"
+    },
+    "toolchainLockSha256": {
+      "$ref": "#/$defs/Sha256Digest"
+    }
+  },
+  "required": [
+    "descriptorVersion",
+    "target",
+    "ffmpegVersion",
+    "ffprobeVersion",
+    "toolchainLockSha256",
+    "configureFlags",
+    "capabilitySetFingerprint",
+    "sharedLibraries"
+  ],
+  "title": "ToolchainDescriptor",
+  "type": "object"
+}
