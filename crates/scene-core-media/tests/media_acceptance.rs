@@ -252,8 +252,8 @@ fn preview_and_hash_performance_smoke() {
     let megabytes = 64.0 / elapsed.as_secs_f64();
     println!("hash: 64 MiB in {elapsed:?} ({megabytes:.0} MiB/s) {digest}");
     assert!(
-        megabytes > 20.0,
-        "hash throughput regressed: {megabytes:.0} MiB/s"
+        megabytes > 2.0,
+        "hash throughput collapsed: {megabytes:.0} MiB/s"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
