@@ -31,7 +31,17 @@ grep -R "^#" docs/architecture/repositories
 
 ## 提交与 Pull Request
 
-当前没有可用 Git 历史可供归纳；采用 Conventional Commits，例如 `feat: add manifest validation`、`fix: reject duplicate event sequence`、`docs: clarify engine contract`。PR 应说明目的、协议或行为变化、验证命令及兼容性影响；涉及 JSON/JSONL 示例时附前后对比，并链接相关 issue。未经评审不要提交密钥、主机绝对路径、原始 FFmpeg stderr 或业务权限信息。
+采用 Conventional Commits，例如 `feat: add manifest validation`、`fix: reject duplicate event sequence`、`docs: clarify engine contract`；提交信息 body 用 `Refs: SC-P0-xx` 关联 ticket。
+
+变更一律走 PR，禁止直接推送 `main`（仓库规则集已强制）：
+
+1. 从最新 `main` 建分支（如 `sc-p0-07-host-cache-docs`），在分支上提交
+2. `gh pr create`，等待三个必需检查通过：Linux checks、Windows checks、Windows bundle spike
+3. CI 失败只在分支上修复，不合并；分支落后或与 `main` 冲突时 rebase 并解决，且必须显式提醒
+4. 三个检查都为绿后才 `gh pr merge --squash --delete-branch`；合并后确认 `main` 上的新 run 也是绿的，再继续下一项
+5. 汇报时逐条列出 run 状态，不把中间失败 run 留在 `main`
+
+PR 应说明目的、协议或行为变化、验证命令及兼容性影响；涉及 JSON/JSONL 示例时附前后对比，并链接相关 issue。未经评审不要提交密钥、主机绝对路径、原始 FFmpeg stderr 或业务权限信息。
 
 ## Agent skills
 
