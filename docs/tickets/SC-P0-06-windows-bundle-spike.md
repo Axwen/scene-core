@@ -32,9 +32,19 @@
 - `scripts/bundle-smoke.ps1`：健康 bundle 的 `version`/`doctor` 通过；篡改工具、删除 DLL、新增未列出文件、错误信任锚全部 fail closed 且带稳定 code。
 - CI 新增 `windows-bundle` job（构建 → 打包 → 冒烟 → 上传 ZIP 与 checksum 工件）；bundle 产物已加入 `.gitignore`。
 
+增量三（2026-09-16，用户 Windows 实测与 buildconf 门禁）：
+
+- 用户在干净 Windows 11 x64（无 Rust/Python/系统 FFmpeg、未改 PATH、非管理员）实测通过：
+  - `version --json` 成功，`doctor --json` 十项全 `ok`、退出码 0；engineCommit 追溯到 CI `20bf48c`，toolchainFingerprint `sha256:2eabc7aa…`，capabilitySetFingerprint `sha256:832e5e1d…`
+  - 负向全部 fail closed：tampered / missing-dll / unlisted → exit 2、`status: failed`、`BUNDLE_FILE_INVALID`；wrong-anchor → exit 2、`MANIFEST_DIGEST_MISMATCH`
+- `bundle-smoke.ps1` 新增 buildconf 校验：`ffmpeg -buildconf` 必须包含 descriptor 记录的全部 configure flags，且不得出现 `--enable-gpl` / `--enable-nonfree`。
+
+验收对照：1、2、4 已满足；3 的 GPL/nonfree（buildconf + flags 校验）、PATH 依赖与管理员权限（干净环境实测）、未记录动态库（白名单组装 + closure hash + 未列文件拒绝）均已有证据。
+
 未完成：
 
-- 原始 PE import 表扫描（当前为白名单组装 + DLL closure hash + 运行时启动验证的组合门禁）；ZIP 字节级可复现；SBOM 细化到 libav* 组件；干净 Windows 11 无依赖实测与最终许可确认由用户执行。
+- 原始 PE import 表扫描；ZIP 字节级可复现；SBOM 细化到 libav* 组件。
+- 许可确认（候选为 LGPL-3.0-or-later，或改为自建 `--disable-version3`）必须在对外分发前完成。
 
 ## 依赖
 
