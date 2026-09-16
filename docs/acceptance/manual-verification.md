@@ -61,8 +61,27 @@ Copy-Item -Recurse . ..\bundle-tampered
 2. 对同一样本跑 `extract_preview`，打开 `output/preview/opening.jpg` 与 `midpoint.jpg`。
 3. 在播放器跳到 0s 与 `floor(duration/2)`（本样本 500ms），确认画面与对应 JPEG 一致（合成 testsrc 图案可辨认）。
 
-## D. 实测记录（模板）
+## D. 实测记录
 
-| 日期 | 环境（系统/是否干净/权限） | 样本 | Operation | 结果 | 备注 |
-|---|---|---|---|---|---|
-| | | | | | |
+### 2026-09-16 · Windows 11 x64（干净、非管理员）· bundle artifact（engineCommit b3e46ad）
+
+命令：`gh run download -n scene-core-0.1.0-alpha.1-windows-x86_64`；`$sha` 取自 `package-manifest.json.sha256`。
+
+| 步骤 | 结果 |
+|---|---|
+| `version --json` | `implementedOperations: ["probe","extract_preview"]`，engineCommit `b3e46ad` |
+| `doctor --json --trusted-manifest-sha256 $sha` | `status: ok`，十项全 `ok`，exit 0 |
+
+| 样本 | Operation | 观测 | 判定 |
+|---|---|---|---|
+| baseline-cfr.mp4 | probe | video/audio start 0，mpeg4+aac，duration 1000 | ✅ |
+| av-offset-80ms.mkv | probe | video 0ms、**audio startTimeMs=80** | ✅ 共享原点 |
+| vfr.mkv | probe | start 0，avg 10/1 | ✅ |
+| bframes.mkv | probe | start 0，avg 10/1 | ✅ |
+| rotation-90.mkv | probe | **rotationDegrees=90**，显示 64x48 | ✅ |
+| attached-picture.flac | probe | attachedPicture=true、**primaryVideoStreamIndex=null** | ✅ |
+| audio-only.m4a | extract_preview | failed、`MISSING_VIDEO_STREAM`、exit 3 | ✅ |
+| corrupt.mp4 | probe | failed、`CORRUPT_MEDIA`、exit 3、无产物 | ✅ |
+| baseline-cfr.mp4 | extract_preview | opening 0ms / midpoint 500ms，均 64x48（不放大），presentationTimeMs null，字节 1465/1450 | ✅ |
+
+待补：`video-only.mkv` probe；本 bundle 的 tamper 负向；播放器点击对照（C）。
