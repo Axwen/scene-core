@@ -184,9 +184,18 @@ fn run_run_command(args: &[String]) -> Result<CliOutput, CliErrorOutput> {
                 Ok(Some(line)) if line.oversized => session
                     .control()
                     .record_violation(scene_core_protocol::control_line_limit_error(line.bytes)),
+                Ok(Some(line)) if line.invalid_utf8 => session.control().record_violation(
+                    ProtocolError::invalid_request("control JSONL must be UTF-8")
+                        .with_stage("framing"),
+                ),
                 Ok(Some(line)) => session.handle_line(&line.text),
                 Ok(None) => break,
-                Err(_) => break,
+                // A failed read can hide a CancelRequest; surface it instead of
+                // silently continuing.
+                Err(error) => session.control().record_violation(
+                    ProtocolError::invalid_request(format!("the control channel failed: {error}"))
+                        .with_stage("framing"),
+                ),
             }
         }
     });
@@ -222,28 +231,28 @@ fn run_run_command(args: &[String]) -> Result<CliOutput, CliErrorOutput> {
             &control,
             emit,
         ),
-        // Interrupted while hashing the staged input: the session still emits
-        // `accepted` followed by the cancelled or timed-out terminal event.
-        Err(error) if error.code == ErrorCode::Cancelled => match StagingRoot::new(&staging_root) {
-            Ok(staging) => run::run_session(
-                &request,
-                &engine,
-                &fingerprint_for_session,
-                &run::UnavailableBackend,
-                &staging,
-                &control,
-                emit,
-            ),
-            Err(_) => {
-                let exit_code = error.code.exit_code();
-                emit_failed(&echo, &engine, *error, emit);
-                exit_code
-            }
-        },
         Err(error) => {
-            let exit_code = error.code.exit_code();
-            emit_failed(&echo, &engine, *error, emit);
-            exit_code
+            // Interrupted while hashing the staged input: the session still
+            // emits `accepted` followed by the cancelled or timed-out terminal.
+            let interrupted = (error.code == ErrorCode::Cancelled)
+                .then(|| StagingRoot::new(&staging_root).ok())
+                .flatten();
+            match interrupted {
+                Some(staging) => run::run_session(
+                    &request,
+                    &engine,
+                    &fingerprint_for_session,
+                    &run::UnavailableBackend,
+                    &staging,
+                    &control,
+                    emit,
+                ),
+                None => {
+                    let exit_code = error.code.exit_code();
+                    emit_failed(&echo, &engine, *error, emit);
+                    exit_code
+                }
+            }
         }
     });
     Ok(CliOutput {
@@ -261,6 +270,9 @@ fn read_first_line() -> Result<Option<String>, String> {
             "the StartRequest line exceeds the {} byte hard limit",
             MAX_CONTROL_LINE_BYTES
         )),
+        Ok(Some(line)) if line.invalid_utf8 => {
+            Err("the StartRequest line is not valid UTF-8".to_owned())
+        }
         Ok(Some(line)) => Ok(Some(line.text)),
         Ok(None) => Ok(None),
         Err(error) => Err(format!("stdin could not be read: {error}")),
@@ -272,6 +284,8 @@ struct CappedLine {
     text: String,
     bytes: usize,
     oversized: bool,
+    /// Protocol JSONL is UTF-8; a line that is not is a framing error.
+    invalid_utf8: bool,
 }
 
 /// JSONL reader that never buffers more than `cap` bytes of one line; the rest
@@ -313,10 +327,15 @@ impl<R: BufRead> CappedLines<R> {
         if !saw_input {
             return Ok(None);
         }
+        let (text, invalid_utf8) = match String::from_utf8(collected) {
+            Ok(text) => (text, false),
+            Err(error) => (String::from_utf8_lossy(error.as_bytes()).into_owned(), true),
+        };
         Ok(Some(CappedLine {
-            text: String::from_utf8_lossy(&collected).into_owned(),
+            text,
             bytes,
             oversized: bytes > self.cap,
+            invalid_utf8,
         }))
     }
 }
@@ -507,6 +526,18 @@ mod tests {
         assert_eq!(read[0].text, "01234");
         assert_eq!(read[1].text, "short");
         assert!(!read[1].oversized);
+    }
+
+    #[test]
+    fn capped_lines_flag_invalid_utf8() {
+        let mut reader = CappedLines::new(Cursor::new(vec![b'a', 0xFF, 0xFE, b'\n']), 16);
+        let line = reader.next_line().expect("read").expect("line");
+        assert!(line.invalid_utf8);
+        assert!(!line.oversized);
+        assert!(!line.text.is_empty());
+
+        let read = lines("ok\n", 16);
+        assert!(!read[0].invalid_utf8);
     }
 
     #[test]

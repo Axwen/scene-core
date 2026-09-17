@@ -7,8 +7,8 @@
 ## 1. 传输与边界
 
 - 一条 Host 请求进入 stdin 或等价的受控进程通道；事件逐条写 stdout 并 flush。
-- 媒体和 Artifact 字节不内嵌 JSON，由 Host 管理私有 staging。staging 内不得出现指向根外的符号链接/reparse：`input/source.media` 及其父目录、Artifact 路径的任一层是符号链接时按 `INPUT_NOT_FOUND` 受控失败，不跟随链接读取。
-- 请求的单行 JSONL 有 1 MiB 硬上限；读取阶段即按上限截断，超限行按 framing 错误处理，不会先整行分配再校验。
+- 媒体和 Artifact 字节不内嵌 JSON，由 Host 管理私有 staging。staging 内不得出现指向根外的符号链接/reparse：`input/source.media` 及其父目录以及每个待写入路径（含从 Artifact 派生的临时文件，如 `opening.tmp`）的任一层是符号链接时受控失败，不跟随链接读取或写入。
+- 请求的单行 JSONL 必须是有效的 UTF-8 且有 1 MiB 硬上限；读取阶段即按上限截断，超限或非 UTF-8 的行按 framing 错误处理，不会先整行分配再校验。
 - stderr 只用于受控诊断，不是稳定协议；不得输出绝对路径、完整 argv、原始 FFmpeg stderr、媒体内容或凭据。
 - 事件流是契约的一部分：终态事件无法写入 stdout（调用方提前关闭管道等）时进程以非零退出码结束，不得按成功结束。
 - Core 不连接业务数据库、对象存储、缓存数据库或权限系统；HTTP/gRPC、Tauri 和桌面安装包不属于 Core 0.1。
