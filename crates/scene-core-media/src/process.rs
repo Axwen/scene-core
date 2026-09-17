@@ -152,9 +152,16 @@ pub fn run(spec: &ProcessSpec) -> Result<ProcessOutput, ProcessError> {
 type CappedOutput = std::io::Result<(Vec<u8>, bool)>;
 
 fn collect_output(receiver: std::sync::mpsc::Receiver<CappedOutput>) -> CappedOutput {
+    use std::sync::mpsc::RecvTimeoutError;
     match receiver.recv_timeout(Duration::from_secs(2)) {
         Ok(value) => value,
-        Err(_) => Ok((Vec::new(), true)),
+        Err(RecvTimeoutError::Timeout) => Err(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "the tool kept its output pipe open after it exited",
+        )),
+        Err(RecvTimeoutError::Disconnected) => Err(std::io::Error::other(
+            "the tool output reader stopped without reporting",
+        )),
     }
 }
 
@@ -204,5 +211,17 @@ mod tests {
 
         let error = read_capped(FailingReader, 4).expect_err("read error must not look like EOF");
         assert_eq!(error.kind(), std::io::ErrorKind::Other);
+    }
+
+    #[test]
+    fn collect_output_reports_a_missing_reader_result() {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        drop(sender);
+        let error = collect_output(receiver).expect_err("a stopped reader is an error");
+        assert_eq!(error.kind(), std::io::ErrorKind::Other);
+
+        let (_sender, receiver) = std::sync::mpsc::channel::<CappedOutput>();
+        let error = collect_output(receiver).expect_err("a silent reader is an error");
+        assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
     }
 }

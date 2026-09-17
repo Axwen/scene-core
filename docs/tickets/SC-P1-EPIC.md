@@ -54,6 +54,11 @@
 | Standards P2 | 工具输出读取错误被当作 EOF | `read_capped` 显式返回 I/O 错误并向上映射 | `process::tests::read_capped_reports_truncation_and_read_errors` |
 | Standards P2 | 事件写入/flush 错误被忽略 | 交付失败时以非零退出码结束 | `emit_events` 记录写失败并返回 `ENGINE_INTERNAL` |
 | Standards P2 | 请求生成脚本整读媒体 | 分块流式 hash | `scripts/make-run-request.py` |
+| Spec P1（复核追加） | 只校验最终 `.jpg`，预置 `opening.tmp` 符号链接可越界写入并回收为 Artifact | 临时文件路径同样过 `StagingRoot::contain` | `preview_temporary_symlink_cannot_escape_staging`（去掉校验即复现越界写入） |
+| Spec P2（复核追加） | 非法 UTF-8 行被 `from_utf8_lossy` 替换后继续解析 | 非 UTF-8 行按 framing 错误拒绝 | `capped_lines_flag_invalid_utf8` |
+| Standards P2（复核追加） | `recv_timeout` 的 Timeout/Disconnected 被伪装成空输出 | 两种情形都按读取错误上报 | `collect_output_reports_a_missing_reader_result` |
+| Standards P2（复核追加） | 控制通道读取失败静默 break | 读取失败记录 framing 违规 | 控制线程错误分支 |
+| Standards P2（复核追加） | 输入 `metadata` 错误被当成尺寸 0 | I/O 错误按 `INPUT_NOT_FOUND` 上报 | `validate_request` 元数据分支 |
 | 额外（TS 探测） | MPEG-TS 的 `coded_width: 0` 被当成零尺寸流，导致 probe `ENGINE_INTERNAL` | `0` 视为未知；尺寸/采样率/声道只保留正值 | `zero_coded_dimensions_from_mpegts_are_unknown`；真实 TS probe + extract_preview 端到端通过 |
 
 ### 仍然开放（不阻塞 Phase 1 结项）

@@ -240,6 +240,9 @@ impl MediaBackend for ProbeBackend {
                 std::fs::create_dir_all(parent).map_err(|_| MediaFailure::Internal)?;
             }
             let temporary = path.with_extension("tmp");
+            staging
+                .contain(&temporary)
+                .map_err(|_| MediaFailure::Internal)?;
             preview::generate(
                 &self.toolchain,
                 &input,
@@ -383,7 +386,14 @@ pub fn validate_request(
             "inputs must contain source_media",
         ))
     })?;
-    let byte_size = std::fs::metadata(&input).map(|m| m.len()).unwrap_or(0);
+    let byte_size = std::fs::metadata(&input)
+        .map_err(|_| {
+            Box::new(
+                ProtocolError::new(ErrorCode::InputNotFound, "the staged input is unreadable")
+                    .with_stage("staging"),
+            )
+        })?
+        .len();
     let content_hash = match hash_file_cancellable(&input, Some(control.cancelled_flag())) {
         Ok(Some(digest)) => digest,
         Ok(None) => return Err(Box::new(cancelled_error())),

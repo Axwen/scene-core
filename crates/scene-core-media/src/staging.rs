@@ -68,8 +68,15 @@ impl StagingRoot {
 
     pub fn output(&self, reference: &RelativeRef) -> Result<PathBuf, StagingError> {
         let candidate = self.root.join(reference.as_str());
-        self.reject_symlinks(&candidate)?;
+        self.contain(&candidate)?;
         Ok(candidate)
+    }
+
+    /// Rejects a path that is not below the root or that traverses a symlink.
+    /// Every path the engine is about to create or write must pass through
+    /// here, including temporary files derived from a validated output.
+    pub fn contain(&self, candidate: &Path) -> Result<(), StagingError> {
+        self.reject_symlinks(candidate)
     }
 
     /// Rejects any symlink on the path below the root. `symlink_metadata` does

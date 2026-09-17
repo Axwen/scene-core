@@ -700,6 +700,43 @@ fn deadline_reaps_the_tool_and_exits_124() {
 
 #[cfg(unix)]
 #[test]
+fn preview_temporary_symlink_cannot_escape_staging() {
+    let Ok(bin_dir) = std::env::var(scene_core_media::toolchain::ENV_FFMPEG_DIR) else {
+        eprintln!("skipping: SCENE_CORE_FFMPEG_DIR is not set");
+        return;
+    };
+    let staging = std::env::temp_dir().join(format!("scene-core-fault-tmp-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&staging);
+    stage_media(&bin_dir, &staging);
+    let outside =
+        std::env::temp_dir().join(format!("scene-core-escape-{}.jpg", std::process::id()));
+    let _ = std::fs::remove_file(&outside);
+    std::fs::create_dir_all(staging.join("output/preview")).expect("output dir");
+    std::os::unix::fs::symlink(&outside, staging.join("output/preview/opening.tmp"))
+        .expect("symlink");
+
+    let request = live_request(Operation::ExtractPreview, &staging, 60_000);
+    let fingerprint = digest(2).as_str().to_owned();
+    let (exit_code, stdout, stderr) = run_binary(
+        &["run", "--staging-root", staging.to_str().expect("utf-8")],
+        Some(&serde_json::to_string(&request).expect("serialize")),
+        &[
+            ("SCENE_CORE_FFMPEG_DIR", &bin_dir),
+            ("SCENE_CORE_TOOLCHAIN_FINGERPRINT", &fingerprint),
+        ],
+    );
+    assert_ne!(exit_code, 0, "stdout: {stdout} stderr: {stderr}");
+    assert!(
+        !outside.exists(),
+        "the preview was written outside staging: {}",
+        outside.display()
+    );
+    let _ = std::fs::remove_dir_all(&staging);
+    let _ = std::fs::remove_file(&outside);
+}
+
+#[cfg(unix)]
+#[test]
 fn unwritable_output_reports_resource_limit_without_artifacts() {
     let Ok(bin_dir) = std::env::var(scene_core_media::toolchain::ENV_FFMPEG_DIR) else {
         eprintln!("skipping: SCENE_CORE_FFMPEG_DIR is not set");
