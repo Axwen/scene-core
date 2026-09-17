@@ -59,6 +59,8 @@
 | Standards P2（复核追加） | `recv_timeout` 的 Timeout/Disconnected 被伪装成空输出 | 两种情形都按读取错误上报 | `collect_output_reports_a_missing_reader_result` |
 | Standards P2（复核追加） | 控制通道读取失败静默 break | 读取失败记录 framing 违规 | 控制线程错误分支 |
 | Standards P2（复核追加） | 输入 `metadata` 错误被当成尺寸 0 | I/O 错误按 `INPUT_NOT_FOUND` 上报 | `validate_request` 元数据分支 |
+| Standards P2（第三轮） | 控制通道读取失败记录违规后未退出循环，会忙等并反复覆盖错误 | 记录后 `break` | `capped_lines_propagate_read_errors` |
+| Spec P2（第三轮） | 超限行仍继续读到换行/EOF，无换行的超长输入可在 deadline 之前无限等待 | 超过上限即刻返回该行（不再读到换行） | `oversized_lines_stop_reading_without_a_newline`（去掉提前返回即失败） |
 | 额外（TS 探测） | MPEG-TS 的 `coded_width: 0` 被当成零尺寸流，导致 probe `ENGINE_INTERNAL` | `0` 视为未知；尺寸/采样率/声道只保留正值 | `zero_coded_dimensions_from_mpegts_are_unknown`；真实 TS probe + extract_preview 端到端通过 |
 
 ### 仍然开放（不阻塞 Phase 1 结项）

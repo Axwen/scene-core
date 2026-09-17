@@ -190,12 +190,17 @@ fn run_run_command(args: &[String]) -> Result<CliOutput, CliErrorOutput> {
                 ),
                 Ok(Some(line)) => session.handle_line(&line.text),
                 Ok(None) => break,
-                // A failed read can hide a CancelRequest; surface it instead of
-                // silently continuing.
-                Err(error) => session.control().record_violation(
-                    ProtocolError::invalid_request(format!("the control channel failed: {error}"))
+                // A failed read can hide a CancelRequest; surface it and stop
+                // reading instead of spinning on the same error.
+                Err(error) => {
+                    session.control().record_violation(
+                        ProtocolError::invalid_request(format!(
+                            "the control channel failed: {error}"
+                        ))
                         .with_stage("framing"),
-                ),
+                    );
+                    break;
+                }
             }
         }
     });
@@ -288,8 +293,24 @@ struct CappedLine {
     invalid_utf8: bool,
 }
 
-/// JSONL reader that never buffers more than `cap` bytes of one line; the rest
-/// of an oversized line is consumed and discarded.
+impl CappedLine {
+    fn new(collected: Vec<u8>, bytes: usize, oversized: bool) -> Self {
+        let (text, invalid_utf8) = match String::from_utf8(collected) {
+            Ok(text) => (text, false),
+            Err(error) => (String::from_utf8_lossy(error.as_bytes()).into_owned(), true),
+        };
+        Self {
+            text,
+            bytes,
+            oversized,
+            invalid_utf8,
+        }
+    }
+}
+
+/// JSONL reader that never buffers more than `cap` bytes of one line and stops
+/// reading a line as soon as it is known to be oversized, so an endless line
+/// cannot block the caller.
 struct CappedLines<R> {
     reader: R,
     cap: usize,
@@ -321,22 +342,19 @@ impl<R: BufRead> CappedLines<R> {
             };
             bytes += content;
             let space = self.cap.saturating_sub(collected.len());
-            collected.extend_from_slice(&available[..space.min(content)]);
+            let take = space.min(content);
+            collected.extend_from_slice(&available[..take]);
             self.reader.consume(consume);
+            if take < content {
+                // The line is already over the cap: report it now instead of
+                // reading on until a newline that may never arrive.
+                return Ok(Some(CappedLine::new(collected, bytes, true)));
+            }
         }
         if !saw_input {
             return Ok(None);
         }
-        let (text, invalid_utf8) = match String::from_utf8(collected) {
-            Ok(text) => (text, false),
-            Err(error) => (String::from_utf8_lossy(error.as_bytes()).into_owned(), true),
-        };
-        Ok(Some(CappedLine {
-            text,
-            bytes,
-            oversized: bytes > self.cap,
-            invalid_utf8,
-        }))
+        Ok(Some(CappedLine::new(collected, bytes, bytes > self.cap)))
     }
 }
 
@@ -543,5 +561,78 @@ mod tests {
     #[test]
     fn capped_lines_stop_at_eof() {
         assert!(lines("", 16).is_empty());
+    }
+
+    #[test]
+    fn oversized_lines_stop_reading_without_a_newline() {
+        static CHUNK: [u8; 8192] = [b'a'; 8192];
+
+        struct CountingReader {
+            calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        }
+
+        impl std::io::Read for CountingReader {
+            fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+                let available = self.fill_buf()?;
+                let take = available.len().min(buffer.len());
+                buffer[..take].copy_from_slice(&available[..take]);
+                self.consume(take);
+                Ok(take)
+            }
+        }
+
+        impl std::io::BufRead for CountingReader {
+            fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+                let call = self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+                // A second chunk would mean the reader kept going after the cap,
+                // so the test fails instead of hanging on an endless line.
+                Ok(if call == 1 { &CHUNK } else { &[] })
+            }
+
+            fn consume(&mut self, amount: usize) {
+                assert!(amount <= CHUNK.len(), "consumed more than supplied");
+            }
+        }
+
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mut reader = CappedLines::new(
+            CountingReader {
+                calls: calls.clone(),
+            },
+            1024,
+        );
+        let line = reader
+            .next_line()
+            .expect("read")
+            .expect("one oversized line");
+        assert!(line.oversized);
+        assert_eq!(line.text.len(), 1024);
+        assert_eq!(
+            calls.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "the reader must not keep reading an oversized line"
+        );
+    }
+
+    #[test]
+    fn capped_lines_propagate_read_errors() {
+        struct FailingReader;
+
+        impl std::io::Read for FailingReader {
+            fn read(&mut self, _buffer: &mut [u8]) -> std::io::Result<usize> {
+                Err(std::io::Error::other("simulated stdin failure"))
+            }
+        }
+
+        impl std::io::BufRead for FailingReader {
+            fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+                Err(std::io::Error::other("simulated stdin failure"))
+            }
+
+            fn consume(&mut self, _amount: usize) {}
+        }
+
+        let mut reader = CappedLines::new(FailingReader, 16);
+        assert!(reader.next_line().is_err());
     }
 }
