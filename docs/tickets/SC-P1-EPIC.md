@@ -61,6 +61,7 @@
 | Standards P2（复核追加） | 输入 `metadata` 错误被当成尺寸 0 | I/O 错误按 `INPUT_NOT_FOUND` 上报 | `validate_request` 元数据分支 |
 | Standards P2（第三轮） | 控制通道读取失败记录违规后未退出循环，会忙等并反复覆盖错误 | 记录后 `break` | `capped_lines_propagate_read_errors` |
 | Spec P2（第三轮） | 超限行仍继续读到换行/EOF，无换行的超长输入可在 deadline 之前无限等待 | 超过上限即刻返回该行（不再读到换行） | `oversized_lines_stop_reading_without_a_newline`（去掉提前返回即失败） |
+| P2（第四轮） | 超限/非法 UTF-8/协议违规只记录违规、不退出控制读取循环，持续无换行输入会一直读下去 | 抽出 `read_control_lines`，任一 framing 违规或已存在违规即退出循环 | `control_reader_stops_on_an_endless_oversized_line`、`control_reader_stops_after_an_invalid_utf8_line`、`control_reader_stops_after_a_protocol_violation`（去掉退出即三项失败） |
 | 额外（TS 探测） | MPEG-TS 的 `coded_width: 0` 被当成零尺寸流，导致 probe `ENGINE_INTERNAL` | `0` 视为未知；尺寸/采样率/声道只保留正值 | `zero_coded_dimensions_from_mpegts_are_unknown`；真实 TS probe + extract_preview 端到端通过 |
 
 ### 仍然开放（不阻塞 Phase 1 结项）

@@ -179,30 +179,7 @@ fn run_run_command(args: &[String]) -> Result<CliOutput, CliErrorOutput> {
     std::thread::spawn(move || {
         let stdin = std::io::stdin();
         let mut lines = CappedLines::new(stdin.lock(), MAX_CONTROL_LINE_BYTES);
-        loop {
-            match lines.next_line() {
-                Ok(Some(line)) if line.oversized => session
-                    .control()
-                    .record_violation(scene_core_protocol::control_line_limit_error(line.bytes)),
-                Ok(Some(line)) if line.invalid_utf8 => session.control().record_violation(
-                    ProtocolError::invalid_request("control JSONL must be UTF-8")
-                        .with_stage("framing"),
-                ),
-                Ok(Some(line)) => session.handle_line(&line.text),
-                Ok(None) => break,
-                // A failed read can hide a CancelRequest; surface it and stop
-                // reading instead of spinning on the same error.
-                Err(error) => {
-                    session.control().record_violation(
-                        ProtocolError::invalid_request(format!(
-                            "the control channel failed: {error}"
-                        ))
-                        .with_stage("framing"),
-                    );
-                    break;
-                }
-            }
-        }
+        read_control_lines(&mut lines, &mut session);
     });
     {
         let control = control.clone();
@@ -264,6 +241,38 @@ fn run_run_command(args: &[String]) -> Result<CliOutput, CliErrorOutput> {
         json: String::new(),
         exit_code,
     })
+}
+
+/// Reads control JSONL until the stream ends or the control state is already
+/// decided. Any framing violation stops the loop: the violation is terminal for
+/// the run, so reading on would only risk spinning on a broken stream.
+fn read_control_lines<R: BufRead>(lines: &mut CappedLines<R>, session: &mut run::ControlSession) {
+    loop {
+        match lines.next_line() {
+            Ok(Some(line)) if line.oversized => {
+                session
+                    .control()
+                    .record_violation(scene_core_protocol::control_line_limit_error(line.bytes));
+            }
+            Ok(Some(line)) if line.invalid_utf8 => session.control().record_violation(
+                ProtocolError::invalid_request("control JSONL must be UTF-8").with_stage("framing"),
+            ),
+            Ok(Some(line)) => {
+                session.handle_line(&line.text);
+                if session.control().violation().is_none() {
+                    continue;
+                }
+            }
+            Ok(None) => return,
+            // A failed read can hide a CancelRequest; surface it instead of
+            // spinning on the same error.
+            Err(error) => session.control().record_violation(
+                ProtocolError::invalid_request(format!("the control channel failed: {error}"))
+                    .with_stage("framing"),
+            ),
+        }
+        return;
+    }
 }
 
 /// Reads the first stdin line with the JSONL line cap applied.
@@ -612,6 +621,97 @@ mod tests {
             1,
             "the reader must not keep reading an oversized line"
         );
+    }
+
+    /// Serves one fixed chunk per `fill_buf` call, then EOF.
+    struct ScriptedReader {
+        chunks: Vec<Vec<u8>>,
+        calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    impl std::io::Read for ScriptedReader {
+        fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+            let available = self.fill_buf()?;
+            let take = available.len().min(buffer.len());
+            buffer[..take].copy_from_slice(&available[..take]);
+            self.consume(take);
+            Ok(take)
+        }
+    }
+
+    impl std::io::BufRead for ScriptedReader {
+        fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+            let index = self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(self.chunks.get(index).map_or(&[][..], Vec::as_slice))
+        }
+
+        fn consume(&mut self, _amount: usize) {}
+    }
+
+    fn scripted(
+        chunks: Vec<Vec<u8>>,
+    ) -> (
+        ScriptedReader,
+        std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    ) {
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        (
+            ScriptedReader {
+                chunks,
+                calls: calls.clone(),
+            },
+            calls,
+        )
+    }
+
+    fn probe_request() -> StartRequest {
+        StartRequest::parse(include_str!(
+            "../../../fixtures/protocol/valid/control-start-probe.json"
+        ))
+        .expect("fixture parses")
+    }
+
+    #[test]
+    fn control_reader_stops_on_an_endless_oversized_line() {
+        let mut session = run::ControlSession::new(&probe_request(), RunControl::new());
+        let (reader, calls) = scripted(vec![vec![b'a'; 8192], vec![b'a'; 8192]]);
+        let mut lines = CappedLines::new(reader, 64);
+        read_control_lines(&mut lines, &mut session);
+        assert!(session.control().violation().is_some());
+        assert_eq!(
+            calls.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "an oversized control line must stop the reader loop"
+        );
+    }
+
+    #[test]
+    fn control_reader_stops_after_an_invalid_utf8_line() {
+        let mut session = run::ControlSession::new(&probe_request(), RunControl::new());
+        let (reader, calls) = scripted(vec![vec![0xFF, 0xFE, b'\n'], vec![b'{', b'}', b'\n']]);
+        let mut lines = CappedLines::new(reader, 64);
+        read_control_lines(&mut lines, &mut session);
+        assert!(session.control().violation().is_some());
+        assert_eq!(
+            calls.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "a non-UTF-8 control line must stop the reader loop"
+        );
+    }
+
+    #[test]
+    fn control_reader_stops_after_a_protocol_violation() {
+        let mut session = run::ControlSession::new(&probe_request(), RunControl::new());
+        let cancel =
+            br#"{"engineProtocolVersion":"0.1","messageType":"cancel","requestId":"other"}"#;
+        let (reader, calls) = scripted(vec![
+            [cancel.as_slice(), b"\n"].concat(),
+            vec![b'{', b'}', b'\n'],
+        ]);
+        let mut lines = CappedLines::new(reader, 256);
+        read_control_lines(&mut lines, &mut session);
+        assert!(session.control().violation().is_some());
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
 
     #[test]
