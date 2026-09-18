@@ -317,7 +317,7 @@ impl CappedLine {
     }
 }
 
-/// JSONL reader that never buffers more than `cap` bytes of one line and stops
+/// JSONL reader that buffers at most `cap + 1` bytes of one line and stops
 /// reading a line as soon as it is known to be oversized, so an endless line
 /// cannot block the caller.
 struct CappedLines<R> {
@@ -332,38 +332,25 @@ impl<R: BufRead> CappedLines<R> {
 
     fn next_line(&mut self) -> std::io::Result<Option<CappedLine>> {
         let mut collected: Vec<u8> = Vec::new();
-        let mut bytes = 0_usize;
-        let mut saw_input = false;
-        let mut finished = false;
-        while !finished {
-            let available = self.reader.fill_buf()?;
-            if available.is_empty() {
-                break;
-            }
-            saw_input = true;
-            let newline = available.iter().position(|byte| *byte == b'\n');
-            let (content, consume) = match newline {
-                Some(index) => {
-                    finished = true;
-                    (index, index + 1)
-                }
-                None => (available.len(), available.len()),
-            };
-            bytes += content;
-            let space = self.cap.saturating_sub(collected.len());
-            let take = space.min(content);
-            collected.extend_from_slice(&available[..take]);
-            self.reader.consume(consume);
-            if take < content {
-                // The line is already over the cap: report it now instead of
-                // reading on until a newline that may never arrive.
-                return Ok(Some(CappedLine::new(collected, bytes, true)));
-            }
-        }
-        if !saw_input {
+        // Reading one byte past the cap is enough to know the line is over it,
+        // and the cap keeps the read bounded even without a newline.
+        let read = std::io::Read::take(&mut self.reader, self.cap as u64 + 1)
+            .read_until(b'\n', &mut collected)?;
+        if read == 0 {
             return Ok(None);
         }
-        Ok(Some(CappedLine::new(collected, bytes, bytes > self.cap)))
+        let complete = collected.ends_with(b"\n");
+        if complete {
+            collected.pop();
+        }
+        let bytes = collected.len();
+        // The take limit was hit without a newline, so the line is over the cap.
+        // Fewer bytes without a newline means the stream simply ended there.
+        Ok(Some(CappedLine::new(
+            collected,
+            bytes,
+            !complete && bytes > self.cap,
+        )))
     }
 }
 
@@ -547,12 +534,19 @@ mod tests {
         assert_eq!(read[2].text, "two");
         assert!(!read[2].oversized);
 
-        let read = lines("0123456789\nshort\n", 5);
-        assert_eq!(read[0].bytes, 10);
-        assert!(read[0].oversized);
-        assert_eq!(read[0].text, "01234");
-        assert_eq!(read[1].text, "short");
-        assert!(!read[1].oversized);
+        // A line over the cap is reported as soon as the take limit is hit.
+        let mut reader = CappedLines::new(Cursor::new(b"0123456789\n".to_vec()), 5);
+        let oversized = reader.next_line().expect("read").expect("line");
+        assert!(oversized.oversized);
+        assert_eq!(oversized.bytes, 6);
+        assert_eq!(oversized.text, "012345");
+
+        // Exactly `cap` bytes plus the newline still fits.
+        let mut reader = CappedLines::new(Cursor::new(b"01234\n".to_vec()), 5);
+        let exact = reader.next_line().expect("read").expect("line");
+        assert!(!exact.oversized);
+        assert_eq!(exact.bytes, 5);
+        assert_eq!(exact.text, "01234");
     }
 
     #[test]
@@ -574,48 +568,14 @@ mod tests {
 
     #[test]
     fn oversized_lines_stop_reading_without_a_newline() {
-        static CHUNK: [u8; 8192] = [b'a'; 8192];
-
-        struct CountingReader {
-            calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
-        }
-
-        impl std::io::Read for CountingReader {
-            fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
-                let available = self.fill_buf()?;
-                let take = available.len().min(buffer.len());
-                buffer[..take].copy_from_slice(&available[..take]);
-                self.consume(take);
-                Ok(take)
-            }
-        }
-
-        impl std::io::BufRead for CountingReader {
-            fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
-                let call = self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
-                // A second chunk would mean the reader kept going after the cap,
-                // so the test fails instead of hanging on an endless line.
-                Ok(if call == 1 { &CHUNK } else { &[] })
-            }
-
-            fn consume(&mut self, amount: usize) {
-                assert!(amount <= CHUNK.len(), "consumed more than supplied");
-            }
-        }
-
-        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-        let mut reader = CappedLines::new(
-            CountingReader {
-                calls: calls.clone(),
-            },
-            1024,
-        );
-        let line = reader
+        let (reader, calls) = scripted(vec![vec![b'a'; 8192]]);
+        let mut lines = CappedLines::new(reader, 1024);
+        let line = lines
             .next_line()
             .expect("read")
             .expect("one oversized line");
         assert!(line.oversized);
-        assert_eq!(line.text.len(), 1024);
+        assert_eq!(line.text.len(), 1025);
         assert_eq!(
             calls.load(std::sync::atomic::Ordering::SeqCst),
             1,

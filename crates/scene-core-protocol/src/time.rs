@@ -98,14 +98,6 @@ impl ExactTime {
         Ok(Self { num, den })
     }
 
-    /// Converts a validated wire rational (seconds) into exact time.
-    pub fn from_rational(rational: Rational) -> Result<Self, TimeError> {
-        if rational.den <= 0 {
-            return Err(TimeError::DenominatorNotPositive);
-        }
-        Self::from_parts(i128::from(rational.num), i128::from(rational.den))
-    }
-
     /// Converts an integer millisecond value into exact time.
     pub fn from_milliseconds(milliseconds: i64) -> Self {
         Self::from_parts(i128::from(milliseconds), MS_PER_SECOND)
@@ -155,10 +147,6 @@ impl ExactTime {
 
     pub fn is_negative(&self) -> bool {
         self.num < 0
-    }
-
-    pub fn is_zero(&self) -> bool {
-        self.num == 0
     }
 
     /// Exact ordering without rounding.
