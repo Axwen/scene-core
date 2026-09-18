@@ -198,7 +198,6 @@ impl MediaBackend for ProbeBackend {
             &staging.input(),
             Some(control.process_flag()),
         )
-        .map(|outcome| outcome.media)
         .map_err(|error| classify_probe_error(error, control))
     }
 
@@ -210,7 +209,7 @@ impl MediaBackend for ProbeBackend {
         let input = staging.input();
         let probed = probe_with_cancel(&self.toolchain, &input, Some(control.process_flag()))
             .map_err(|error| classify_probe_error(error, control))?;
-        if probed.media.primary_video_stream_index.is_none() {
+        if probed.primary_video_stream_index.is_none() {
             return Err(MediaFailure::MissingVideoStream);
         }
         let mut requests: Vec<(u64, ArtifactRole, &str, &str)> = vec![(
@@ -219,7 +218,7 @@ impl MediaBackend for ProbeBackend {
             "preview-opening",
             "output/preview/opening.jpg",
         )];
-        if let Some(duration) = probed.media.container.duration_ms {
+        if let Some(duration) = probed.container.duration_ms {
             let midpoint = duration / 2;
             if midpoint > 0 {
                 requests.push((
@@ -271,7 +270,7 @@ impl MediaBackend for ProbeBackend {
             });
         }
         Ok(PreviewOutcome {
-            media: probed.media,
+            media: probed,
             artifacts,
         })
     }

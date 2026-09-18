@@ -42,13 +42,10 @@ impl std::error::Error for InvalidValue {}
 macro_rules! validated_string {
     ($(#[$meta:meta])* $name:ident, $what:literal, $validate:path) => {
         $(#[$meta])*
-        #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        #[derive(Debug, Clone, PartialEq, Eq)]
         pub struct $name(String);
 
         impl $name {
-            /// Wire-facing name used in diagnostics.
-            pub const WIRE_NAME: &'static str = $what;
-
             /// Validates `value` and wraps it.
             pub fn new(value: impl Into<String>) -> Result<Self, InvalidValue> {
                 let value = value.into();
@@ -58,10 +55,6 @@ macro_rules! validated_string {
 
             pub fn as_str(&self) -> &str {
                 &self.0
-            }
-
-            pub fn into_string(self) -> String {
-                self.0
             }
         }
 
@@ -81,22 +74,6 @@ macro_rules! validated_string {
             type Err = InvalidValue;
 
             fn from_str(value: &str) -> Result<Self, Self::Err> {
-                Self::new(value)
-            }
-        }
-
-        impl TryFrom<String> for $name {
-            type Error = InvalidValue;
-
-            fn try_from(value: String) -> Result<Self, Self::Error> {
-                Self::new(value)
-            }
-        }
-
-        impl TryFrom<&str> for $name {
-            type Error = InvalidValue;
-
-            fn try_from(value: &str) -> Result<Self, Self::Error> {
                 Self::new(value)
             }
         }
