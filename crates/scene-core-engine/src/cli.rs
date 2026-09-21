@@ -169,7 +169,14 @@ fn run_run_command(args: &[String]) -> Result<CliOutput, CliErrorOutput> {
         }
     };
 
-    let toolchain_fingerprint = resolve_toolchain_fingerprint()?;
+    // A missing fingerprint means the toolchain is unavailable; the request
+    // still gets `accepted` followed by a controlled TOOL_UNAVAILABLE failure
+    // instead of a non-protocol CLI error.
+    let toolchain_fingerprint = resolve_toolchain_fingerprint();
+    let fingerprint_for_session = toolchain_fingerprint
+        .as_ref()
+        .cloned()
+        .unwrap_or_else(|_| Sha256Digest::from_bytes(b"toolchain-unavailable"));
 
     // Cancellation, the deadline and protocol violations are live from here on,
     // so the staged-input hash in validation is covered by the request deadline
@@ -190,18 +197,28 @@ fn run_run_command(args: &[String]) -> Result<CliOutput, CliErrorOutput> {
         });
     }
 
-    let fingerprint_for_session = toolchain_fingerprint.clone();
     let backend: Box<dyn run::MediaBackend> = match resolve_toolchain_binaries() {
         Ok(toolchain) => Box::new(ProbeBackend { toolchain }),
         Err(_) => Box::new(run::UnavailableBackend),
     };
-    let validation = run::validate_request(
-        &request,
-        &engine,
-        &fingerprint_for_session,
-        &staging_root,
-        &control,
-    );
+    let validation = match &toolchain_fingerprint {
+        Ok(fingerprint) => {
+            run::validate_request(&request, &engine, fingerprint, &staging_root, &control)
+        }
+        // Without the fingerprint the derivation key cannot be recomputed, so
+        // skip validation and let the unavailable backend report the failure.
+        Err(_) => StagingRoot::new(&staging_root)
+            .map(|staging| run::VerifiedInput { staging })
+            .map_err(|_| {
+                Box::new(
+                    ProtocolError::new(
+                        ErrorCode::ToolUnavailable,
+                        "the fixed media tool is unavailable",
+                    )
+                    .with_stage("validation"),
+                )
+            }),
+    };
     let echo = run::Echo::from_request(&request);
     let exit_code = emit_events(|emit| match validation {
         Ok(verified) => run::run_session(

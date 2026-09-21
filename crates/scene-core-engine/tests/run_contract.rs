@@ -628,6 +628,50 @@ fn stage_media(bin_dir: &str, staging: &Path) {
     assert!(result.success, "media generation failed");
 }
 
+fn stage_short_video_with_long_audio(bin_dir: &str, staging: &Path, matroska: bool) {
+    use scene_core_media::toolchain::Toolchain;
+    let toolchain = Toolchain::from_bin_dir(bin_dir).expect("toolchain");
+    std::fs::create_dir_all(staging.join("input")).expect("input dir");
+    let media = staging.join("input/source.media");
+    // Matroska carries no per-stream duration, so the engine cannot clamp the
+    // midpoint; MP4 reports it and the clamp applies.
+    let (codec, format) = if matroska {
+        ("mjpeg", "matroska")
+    } else {
+        ("mpeg4", "mp4")
+    };
+    let args: Vec<String> = [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc=duration=1:size=320x240:rate=10",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=440:duration=30",
+        "-c:v",
+        codec,
+        "-c:a",
+        "aac",
+        "-f",
+        format,
+        "-y",
+    ]
+    .iter()
+    .map(|flag| (*flag).to_owned())
+    .chain([media.to_string_lossy().into_owned()])
+    .collect();
+    let result = scene_core_media::process::run(&scene_core_media::process::ProcessSpec::new(
+        toolchain.ffmpeg(),
+        args,
+    ))
+    .expect("spawn");
+    assert!(result.success, "media generation failed");
+}
+
 fn live_request(operation: Operation, staging: &Path, deadline_ms: u64) -> StartRequest {
     let input_path = staging.join("input/source.media");
     let content_hash = scene_core_media::hash::hash_file(&input_path).expect("hash");
@@ -735,6 +779,16 @@ fn preview_temporary_symlink_cannot_escape_staging() {
         ],
     );
     assert_ne!(exit_code, 0, "stdout: {stdout} stderr: {stderr}");
+    let events: Vec<EventEnvelope> = stdout
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("event JSON"))
+        .collect();
+    let error = events
+        .last()
+        .and_then(|event| event.error.as_ref())
+        .expect("controlled error");
+    assert_eq!(error.code, ErrorCode::InvalidRequest);
+    assert!(!error.retryable, "staging violations are not retryable");
     assert!(
         !outside.exists(),
         "the preview was written outside staging: {}",
@@ -742,6 +796,90 @@ fn preview_temporary_symlink_cannot_escape_staging() {
     );
     let _ = std::fs::remove_dir_all(&staging);
     let _ = std::fs::remove_file(&outside);
+}
+
+#[test]
+fn preview_midpoint_stays_inside_a_short_video_track() {
+    let Ok(bin_dir) = std::env::var(scene_core_media::toolchain::ENV_FFMPEG_DIR) else {
+        eprintln!("skipping: SCENE_CORE_FFMPEG_DIR is not set");
+        return;
+    };
+    let staging = std::env::temp_dir().join(format!("scene-core-midpoint-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&staging);
+    stage_short_video_with_long_audio(&bin_dir, &staging, false);
+    let request = live_request(Operation::ExtractPreview, &staging, 60_000);
+    let fingerprint = digest(2).as_str().to_owned();
+    let (exit_code, stdout, stderr) = run_binary(
+        &["run", "--staging-root", staging.to_str().expect("utf-8")],
+        Some(&serde_json::to_string(&request).expect("serialize")),
+        &[
+            ("SCENE_CORE_FFMPEG_DIR", &bin_dir),
+            ("SCENE_CORE_TOOLCHAIN_FINGERPRINT", &fingerprint),
+        ],
+    );
+    assert_eq!(exit_code, 0, "stdout: {stdout} stderr: {stderr}");
+    let events: Vec<EventEnvelope> = stdout
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("event JSON"))
+        .collect();
+    assert_eq!(
+        events.last().expect("terminal").event_type,
+        EventType::Completed
+    );
+    let Some(OperationResult::ExtractPreview(result)) =
+        events.last().and_then(|event| event.result.as_ref())
+    else {
+        panic!("expected a preview result");
+    };
+    assert_eq!(result.artifact_manifest.artifacts.len(), 2);
+    assert_eq!(result.artifact_manifest.artifacts[1].requested_time_ms, 500);
+    assert!(staging.join("output/preview/opening.jpg").is_file());
+    assert!(staging.join("output/preview/midpoint.jpg").is_file());
+    let _ = std::fs::remove_dir_all(&staging);
+}
+
+#[test]
+fn preview_skips_a_midpoint_without_a_video_duration() {
+    let Ok(bin_dir) = std::env::var(scene_core_media::toolchain::ENV_FFMPEG_DIR) else {
+        eprintln!("skipping: SCENE_CORE_FFMPEG_DIR is not set");
+        return;
+    };
+    let staging =
+        std::env::temp_dir().join(format!("scene-core-midpoint-skip-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&staging);
+    stage_short_video_with_long_audio(&bin_dir, &staging, true);
+    let request = live_request(Operation::ExtractPreview, &staging, 60_000);
+    let fingerprint = digest(2).as_str().to_owned();
+    let (exit_code, stdout, stderr) = run_binary(
+        &["run", "--staging-root", staging.to_str().expect("utf-8")],
+        Some(&serde_json::to_string(&request).expect("serialize")),
+        &[
+            ("SCENE_CORE_FFMPEG_DIR", &bin_dir),
+            ("SCENE_CORE_TOOLCHAIN_FINGERPRINT", &fingerprint),
+        ],
+    );
+    assert_eq!(exit_code, 0, "stdout: {stdout} stderr: {stderr}");
+    let events: Vec<EventEnvelope> = stdout
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("event JSON"))
+        .collect();
+    assert_eq!(
+        events.last().expect("terminal").event_type,
+        EventType::Completed
+    );
+    let Some(OperationResult::ExtractPreview(result)) =
+        events.last().and_then(|event| event.result.as_ref())
+    else {
+        panic!("expected a preview result");
+    };
+    assert_eq!(result.artifact_manifest.artifacts.len(), 1);
+    assert_eq!(
+        result.artifact_manifest.artifacts[0].role,
+        ArtifactRole::Opening
+    );
+    assert!(staging.join("output/preview/opening.jpg").is_file());
+    assert!(!staging.join("output/preview/midpoint.jpg").exists());
+    let _ = std::fs::remove_dir_all(&staging);
 }
 
 #[cfg(unix)]
@@ -824,5 +962,34 @@ fn missing_toolchain_still_reports_accepted_then_failed() {
         terminal.error.as_ref().expect("error").code,
         ErrorCode::ToolUnavailable
     );
+    let _ = std::fs::remove_dir_all(&staging);
+}
+
+#[test]
+fn missing_fingerprint_still_reports_accepted_then_failed() {
+    let staging = std::env::temp_dir().join(format!(
+        "scene-core-fault-fingerprint-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&staging);
+    std::fs::create_dir_all(staging.join("input")).expect("input dir");
+    std::fs::write(staging.join("input/source.media"), b"staged bytes").expect("stage");
+    let request = live_request(Operation::Probe, &staging, 60_000);
+    let (exit_code, stdout, stderr) = run_binary(
+        &["run", "--staging-root", staging.to_str().expect("utf-8")],
+        Some(&serde_json::to_string(&request).expect("serialize")),
+        &[],
+    );
+    assert_eq!(exit_code, 2, "stdout: {stdout} stderr: {stderr}");
+    let events: Vec<EventEnvelope> = stdout
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("event JSON"))
+        .collect();
+    assert_eq!(events[0].event_type, EventType::Accepted);
+    let terminal = events.last().expect("terminal");
+    assert_eq!(terminal.event_type, EventType::Failed);
+    let error = terminal.error.as_ref().expect("error");
+    assert_eq!(error.code, ErrorCode::ToolUnavailable);
+    assert_eq!(error.stage.as_deref(), Some("probe"));
     let _ = std::fs::remove_dir_all(&staging);
 }

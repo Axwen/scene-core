@@ -1,6 +1,6 @@
 //! Preview profile contract against the locked toolchain.
 
-use scene_core_media::preview::{MAX_EDGE, generate, jpeg_dimensions};
+use scene_core_media::preview::{MAX_EDGE, PreviewError, generate, jpeg_dimensions};
 use scene_core_media::process::{ProcessSpec, run};
 use scene_core_media::toolchain::Toolchain;
 use std::path::PathBuf;
@@ -83,7 +83,7 @@ fn nonzero_origin_previews_seek_by_material_time() {
 
     let frame = |name: &str, media: &std::path::Path, requested_ms: u64| {
         let output = dir.join(name);
-        generate(&toolchain, media, requested_ms, &output, None)
+        generate(&toolchain, media, requested_ms, 0, &output, None)
             .unwrap_or_else(|error| panic!("{name}: {error}"));
         std::fs::read(&output).expect("read preview")
     };
@@ -117,11 +117,96 @@ fn large_frames_are_scaled_down_without_cropping() {
     let media = dir.join("large.mkv");
     generate_media(&toolchain, &media, "640x480");
     let output = dir.join("opening.jpg");
-    generate(&toolchain, &media, 0, &output, None).expect("preview");
+    generate(&toolchain, &media, 0, 0, &output, None).expect("preview");
     let bytes = std::fs::read(&output).expect("read preview");
     let (width, height) = jpeg_dimensions(&bytes).expect("jpeg dimensions");
     assert_eq!(width, MAX_EDGE);
     assert_eq!(height, MAX_EDGE * 480 / 640);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn generate_two_video_streams(toolchain: &Toolchain, output: &std::path::Path) {
+    let args: Vec<String> = [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc=size=32x32:duration=1:rate=10",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=64x48:duration=1:rate=10",
+        "-map",
+        "0:v",
+        "-map",
+        "1:v",
+        "-c:v",
+        "mjpeg",
+        "-f",
+        "matroska",
+        "-y",
+    ]
+    .iter()
+    .map(|flag| (*flag).to_owned())
+    .chain([output.to_string_lossy().into_owned()])
+    .collect();
+    let result =
+        run(&ProcessSpec::new(toolchain.ffmpeg(), args).with_timeout(Duration::from_secs(120)))
+            .expect("spawn");
+    assert!(result.success, "media generation failed");
+}
+
+#[test]
+fn seeks_past_the_last_frame_report_no_frame() {
+    let Some(toolchain) = toolchain() else {
+        return;
+    };
+    let dir = temp_dir("no-frame");
+    let media = dir.join("short.mkv");
+    generate_media(&toolchain, &media, "64x48");
+    let output = dir.join("late.jpg");
+    let error = generate(&toolchain, &media, 3_000, 0, &output, None).expect_err("no frame");
+    assert_eq!(error, PreviewError::NoFrame);
+    assert!(!output.exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn one_pixel_frames_are_previewed() {
+    let Some(toolchain) = toolchain() else {
+        return;
+    };
+    let dir = temp_dir("one-pixel");
+    let media = dir.join("one.mkv");
+    generate_media(&toolchain, &media, "1x1");
+    let output = dir.join("opening.jpg");
+    generate(&toolchain, &media, 0, 0, &output, None).expect("preview");
+    let bytes = std::fs::read(&output).expect("read preview");
+    let (width, height) = jpeg_dimensions(&bytes).expect("jpeg dimensions");
+    assert_eq!((width, height), (2, 2));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn preview_maps_the_requested_video_stream() {
+    let Some(toolchain) = toolchain() else {
+        return;
+    };
+    let dir = temp_dir("multi-video");
+    let media = dir.join("two.mkv");
+    generate_two_video_streams(&toolchain, &media);
+
+    let primary = dir.join("primary.jpg");
+    generate(&toolchain, &media, 0, 0, &primary, None).expect("primary preview");
+    let bytes = std::fs::read(&primary).expect("read preview");
+    assert_eq!(jpeg_dimensions(&bytes), Some((32, 32)));
+
+    let secondary = dir.join("secondary.jpg");
+    generate(&toolchain, &media, 0, 1, &secondary, None).expect("secondary preview");
+    let bytes = std::fs::read(&secondary).expect("read preview");
+    assert_eq!(jpeg_dimensions(&bytes), Some((64, 48)));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -134,7 +219,7 @@ fn small_frames_are_not_upscaled() {
     let media = dir.join("small.mkv");
     generate_media(&toolchain, &media, "64x48");
     let output = dir.join("opening.jpg");
-    generate(&toolchain, &media, 0, &output, None).expect("preview");
+    generate(&toolchain, &media, 0, 0, &output, None).expect("preview");
     let bytes = std::fs::read(&output).expect("read preview");
     let (width, height) = jpeg_dimensions(&bytes).expect("jpeg dimensions");
     assert_eq!((width, height), (64, 48));

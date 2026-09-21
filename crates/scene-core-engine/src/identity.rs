@@ -1,7 +1,7 @@
 //! Engine-side identity constants and bundle toolchain discovery.
 
 use scene_core_protocol::{
-    CacheCompatibilityId, CommitHash, EngineIdentity, Operation, ProtocolVersion,
+    CacheCompatibilityId, CommitHash, EngineIdentity, Operation, ProtocolVersion, Sha256Digest,
     ToolchainDescriptor, ToolchainIdentity,
 };
 use std::fs;
@@ -53,16 +53,26 @@ pub fn resolve_bundle_root() -> Result<PathBuf, String> {
     Ok(directory.to_path_buf())
 }
 
-/// Reads the toolchain descriptor shipped next to the engine and derives the
-/// shared identity. The fingerprint is the SHA-256 of the exact file bytes.
-pub fn read_toolchain_identity(bundle_root: &Path) -> Result<ToolchainIdentity, String> {
-    let path = bundle_root.join(TOOLCHAIN_DESCRIPTOR_FILE);
-    let bytes =
-        fs::read(&path).map_err(|_| format!("{TOOLCHAIN_DESCRIPTOR_FILE} could not be read"))?;
+/// Reads the toolchain descriptor at `relative` below `bundle_root`. The
+/// returned fingerprint is the SHA-256 of the exact file bytes.
+pub fn read_toolchain_descriptor(
+    bundle_root: &Path,
+    relative: &str,
+) -> Result<(ToolchainDescriptor, Sha256Digest), String> {
+    let path = bundle_root.join(relative);
+    let bytes = fs::read(&path).map_err(|_| format!("{relative} could not be read"))?;
     let descriptor: ToolchainDescriptor = serde_json::from_slice(&bytes)
-        .map_err(|_| format!("{TOOLCHAIN_DESCRIPTOR_FILE} is not a valid toolchain descriptor"))?;
+        .map_err(|_| format!("{relative} is not a valid toolchain descriptor"))?;
     descriptor
         .validate()
-        .map_err(|error| format!("{TOOLCHAIN_DESCRIPTOR_FILE} is invalid: {error}"))?;
-    Ok(descriptor.to_identity(ToolchainDescriptor::fingerprint(&bytes)))
+        .map_err(|error| format!("{relative} is invalid: {error}"))?;
+    Ok((descriptor, ToolchainDescriptor::fingerprint(&bytes)))
+}
+
+/// Reads the toolchain descriptor shipped next to the engine and derives the
+/// shared identity.
+pub fn read_toolchain_identity(bundle_root: &Path) -> Result<ToolchainIdentity, String> {
+    let (descriptor, fingerprint) =
+        read_toolchain_descriptor(bundle_root, TOOLCHAIN_DESCRIPTOR_FILE)?;
+    Ok(descriptor.to_identity(fingerprint))
 }

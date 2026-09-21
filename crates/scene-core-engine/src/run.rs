@@ -120,6 +120,7 @@ pub enum MediaFailure {
     CorruptMedia,
     MissingVideoStream,
     ResourceLimit,
+    StagingViolation,
     Internal,
 }
 
@@ -134,6 +135,7 @@ impl MediaFailure {
             MediaFailure::CorruptMedia => ErrorCode::CorruptMedia,
             MediaFailure::MissingVideoStream => ErrorCode::MissingVideoStream,
             MediaFailure::ResourceLimit => ErrorCode::ResourceLimit,
+            MediaFailure::StagingViolation => ErrorCode::InvalidRequest,
             MediaFailure::Internal => ErrorCode::EngineInternal,
         }
     }
@@ -209,16 +211,30 @@ impl MediaBackend for ProbeBackend {
         let input = staging.input();
         let probed = probe_with_cancel(&self.toolchain, &input, Some(control.process_flag()))
             .map_err(|error| classify_probe_error(error, control))?;
-        if probed.primary_video_stream_index.is_none() {
+        let Some(primary_video_index) = probed.primary_video_stream_index else {
             return Err(MediaFailure::MissingVideoStream);
-        }
+        };
         let mut requests: Vec<(u64, ArtifactRole, &str, &str)> = vec![(
             0,
             ArtifactRole::Opening,
             "preview-opening",
             "output/preview/opening.jpg",
         )];
-        if let Some(duration) = probed.container.duration_ms {
+        // The midpoint must stay inside the primary video track: a seek past
+        // its last frame produces no file (or an encoder error) even though
+        // the container keeps running for audio.
+        let video_duration_ms = probed
+            .streams
+            .iter()
+            .find(|stream| stream.index == primary_video_index)
+            .and_then(|stream| stream.duration_ms);
+        let midpoint_bound = match (probed.container.duration_ms, video_duration_ms) {
+            (Some(container), Some(video)) => Some(container.min(video)),
+            (Some(container), None) => Some(container),
+            (None, Some(video)) => Some(video),
+            (None, None) => None,
+        };
+        if let Some(duration) = midpoint_bound {
             let midpoint = duration / 2;
             if midpoint > 0 {
                 requests.push((
@@ -234,22 +250,33 @@ impl MediaBackend for ProbeBackend {
             let reference = RelativeRef::new(relative).map_err(|_| MediaFailure::Internal)?;
             let path = staging
                 .output(&reference)
-                .map_err(|_| MediaFailure::Internal)?;
+                .map_err(|_| MediaFailure::StagingViolation)?;
             if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent).map_err(|_| MediaFailure::Internal)?;
+                std::fs::create_dir_all(parent).map_err(|_| MediaFailure::ResourceLimit)?;
             }
             let temporary = path.with_extension("tmp");
             staging
                 .contain(&temporary)
-                .map_err(|_| MediaFailure::Internal)?;
-            preview::generate(
+                .map_err(|_| MediaFailure::StagingViolation)?;
+            match preview::generate(
                 &self.toolchain,
                 &input,
                 requested_time_ms,
+                primary_video_index,
                 &temporary,
                 Some(control.process_flag()),
-            )
-            .map_err(|error| classify_preview_error(error, control))?;
+            ) {
+                Ok(()) => {}
+                // A midpoint frame may be missing even for valid media; the
+                // manifest allows an opening-only artifact set.
+                Err(PreviewError::NoFrame | PreviewError::ToolFailed)
+                    if role == ArtifactRole::Midpoint =>
+                {
+                    let _ = std::fs::remove_file(&temporary);
+                    continue;
+                }
+                Err(error) => return Err(classify_preview_error(error, control)),
+            }
             std::fs::rename(&temporary, &path).map_err(|_| MediaFailure::Internal)?;
             let bytes = std::fs::read(&path).map_err(|_| MediaFailure::Internal)?;
             let (width, height) = preview::jpeg_dimensions(&bytes).ok_or(MediaFailure::Internal)?;
@@ -279,8 +306,16 @@ impl MediaBackend for ProbeBackend {
 fn classify_preview_error(error: PreviewError, control: &RunControl) -> MediaFailure {
     match error {
         PreviewError::ToolUnavailable => MediaFailure::ToolUnavailable,
-        PreviewError::ToolFailed => MediaFailure::ToolFailed,
-        PreviewError::Timeout => MediaFailure::Timeout,
+        PreviewError::ToolFailed | PreviewError::NoFrame => MediaFailure::ToolFailed,
+        // The tool's own 120 s cap is a resource guard, not the request
+        // deadline; only report TIMEOUT when the deadline actually fired.
+        PreviewError::Timeout => {
+            if control.is_timed_out() {
+                MediaFailure::Timeout
+            } else {
+                MediaFailure::ResourceLimit
+            }
+        }
         PreviewError::Cancelled => {
             if control.is_timed_out() {
                 MediaFailure::Timeout
@@ -298,7 +333,13 @@ fn classify_probe_error(error: ProbeError, control: &RunControl) -> MediaFailure
     match error {
         ProbeError::ToolUnavailable => MediaFailure::ToolUnavailable,
         ProbeError::ToolFailed => MediaFailure::ToolFailed,
-        ProbeError::Timeout => MediaFailure::Timeout,
+        ProbeError::Timeout => {
+            if control.is_timed_out() {
+                MediaFailure::Timeout
+            } else {
+                MediaFailure::ResourceLimit
+            }
+        }
         ProbeError::Cancelled => {
             if control.is_timed_out() {
                 MediaFailure::Timeout
@@ -577,6 +618,7 @@ fn failure_error(operation: Operation, failure: &MediaFailure) -> ProtocolError 
         MediaFailure::CorruptMedia => "the media is corrupt or cannot be parsed",
         MediaFailure::MissingVideoStream => "the media has no usable video stream",
         MediaFailure::ResourceLimit => "a resource limit was reached",
+        MediaFailure::StagingViolation => "the staging root violates containment",
         MediaFailure::Timeout => "the request reached its deadline",
         MediaFailure::Cancelled => "the request was cancelled",
         MediaFailure::Internal => "an internal error occurred",
@@ -717,5 +759,28 @@ mod tests {
     fn civil_dates_cover_epoch_and_leap_day() {
         assert_eq!(civil_from_days(0), (1970, 1, 1));
         assert_eq!(civil_from_days(19_782), (2024, 2, 29));
+    }
+
+    #[test]
+    fn tool_timeouts_only_report_deadline_when_the_deadline_fired() {
+        let control = RunControl::new();
+        assert_eq!(
+            classify_probe_error(ProbeError::Timeout, &control),
+            MediaFailure::ResourceLimit
+        );
+        assert_eq!(
+            classify_preview_error(PreviewError::Timeout, &control),
+            MediaFailure::ResourceLimit
+        );
+
+        control.request_timeout();
+        assert_eq!(
+            classify_probe_error(ProbeError::Timeout, &control),
+            MediaFailure::Timeout
+        );
+        assert_eq!(
+            classify_preview_error(PreviewError::Timeout, &control),
+            MediaFailure::Timeout
+        );
     }
 }

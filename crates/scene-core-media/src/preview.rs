@@ -10,13 +10,14 @@ use std::time::Duration;
 
 pub const MAX_EDGE: u32 = 512;
 const PREVIEW_TIMEOUT: Duration = Duration::from_secs(120);
-const SCALE_FILTER: &str =
-    "scale='min(512,iw)':'min(512,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2";
+const SCALE_FILTER: &str = "scale='max(2,min(512,iw))':'max(2,min(512,ih))':force_original_aspect_ratio=decrease:force_divisible_by=2";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PreviewError {
     ToolUnavailable,
     ToolFailed,
+    /// ffmpeg exited successfully but wrote no frame for the requested time.
+    NoFrame,
     Timeout,
     Cancelled,
     NoVideoStream,
@@ -29,6 +30,7 @@ impl std::fmt::Display for PreviewError {
         let message = match self {
             PreviewError::ToolUnavailable => "ffmpeg is unavailable",
             PreviewError::ToolFailed => "preview generation failed",
+            PreviewError::NoFrame => "the media has no frame at the requested time",
             PreviewError::Timeout => "preview generation reached its deadline",
             PreviewError::Cancelled => "preview generation was cancelled",
             PreviewError::NoVideoStream => "the media has no decodable video stream",
@@ -50,6 +52,7 @@ pub fn generate(
     toolchain: &Toolchain,
     input: &Path,
     requested_time_ms: u64,
+    primary_video_index: u32,
     output: &Path,
     cancellation: Option<Arc<AtomicBool>>,
 ) -> Result<(), PreviewError> {
@@ -64,6 +67,8 @@ pub fn generate(
     args.extend([
         "-i".to_owned(),
         input.to_string_lossy().into_owned(),
+        "-map".to_owned(),
+        format!("0:{primary_video_index}"),
         "-frames:v".to_owned(),
         "1".to_owned(),
         "-vf".to_owned(),
@@ -98,7 +103,7 @@ pub fn generate(
         return Err(PreviewError::ToolFailed);
     }
     if !output.is_file() {
-        return Err(PreviewError::ToolFailed);
+        return Err(PreviewError::NoFrame);
     }
     Ok(())
 }

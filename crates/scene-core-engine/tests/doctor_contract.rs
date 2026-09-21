@@ -286,6 +286,114 @@ fn missing_and_tampered_files_fail_bundle_files() {
     let _ = fs::remove_dir_all(&bundle.root);
 }
 
+fn rewrite_descriptor(
+    bundle: &Bundle,
+    mutate: impl FnOnce(&mut serde_json::Value),
+) -> Sha256Digest {
+    let path = bundle.root.join("toolchain-descriptor.json");
+    let mut descriptor: serde_json::Value =
+        serde_json::from_slice(&fs::read(&path).expect("read descriptor"))
+            .expect("descriptor json");
+    mutate(&mut descriptor);
+    let descriptor_bytes = serde_json::to_vec_pretty(&descriptor).expect("descriptor serializes");
+    fs::write(&path, &descriptor_bytes).expect("write descriptor");
+
+    let mut manifest: serde_json::Value =
+        serde_json::from_slice(&bundle.manifest_bytes).expect("manifest json");
+    manifest["toolchainFingerprint"] = serde_json::Value::String(
+        ToolchainDescriptor::fingerprint(&descriptor_bytes)
+            .as_str()
+            .to_owned(),
+    );
+    for file in manifest["files"].as_array_mut().expect("files") {
+        if file["path"] == "toolchain-descriptor.json" {
+            file["byteSize"] = serde_json::json!(descriptor_bytes.len());
+            file["sha256"] = serde_json::Value::String(
+                Sha256Digest::from_bytes(&descriptor_bytes)
+                    .as_str()
+                    .to_owned(),
+            );
+        }
+    }
+    let manifest_bytes = serde_json::to_vec_pretty(&manifest).expect("manifest serializes");
+    fs::write(
+        bundle.root.join(PackageManifest::SELF_PATH),
+        &manifest_bytes,
+    )
+    .expect("write manifest");
+    Sha256Digest::from_bytes(&manifest_bytes)
+}
+
+#[test]
+fn toolchain_descriptor_ref_is_honored() {
+    let bundle = build_bundle("descriptor-ref");
+    let descriptor_bytes =
+        fs::read(bundle.root.join("toolchain-descriptor.json")).expect("read descriptor");
+    fs::create_dir_all(bundle.root.join("toolchain")).expect("descriptor dir");
+    fs::write(
+        bundle.root.join("toolchain/descriptor.json"),
+        &descriptor_bytes,
+    )
+    .expect("move descriptor");
+    fs::remove_file(bundle.root.join("toolchain-descriptor.json")).expect("remove old descriptor");
+
+    let mut manifest: serde_json::Value =
+        serde_json::from_slice(&bundle.manifest_bytes).expect("manifest json");
+    manifest["toolchainDescriptorRef"] =
+        serde_json::Value::String("toolchain/descriptor.json".to_owned());
+    for file in manifest["files"].as_array_mut().expect("files") {
+        if file["path"] == "toolchain-descriptor.json" {
+            file["path"] = serde_json::Value::String("toolchain/descriptor.json".to_owned());
+        }
+    }
+    let manifest_bytes = serde_json::to_vec_pretty(&manifest).expect("manifest serializes");
+    fs::write(
+        bundle.root.join(PackageManifest::SELF_PATH),
+        &manifest_bytes,
+    )
+    .expect("write manifest");
+    let trusted = Sha256Digest::from_bytes(&manifest_bytes);
+
+    let output = doctor(&bundle, Some(&trusted), &healthy_runner());
+    assert_eq!(output.status, DoctorStatus::Ok, "{output:?}");
+    let _ = fs::remove_dir_all(&bundle.root);
+}
+
+#[test]
+fn descriptor_library_hashes_must_match_the_manifest() {
+    let bundle = build_bundle("dll-hash");
+    let trusted = rewrite_descriptor(&bundle, |descriptor| {
+        descriptor["sharedLibraries"][0]["sha256"] =
+            serde_json::Value::String(digest('7').as_str().to_owned());
+    });
+    let output = doctor(&bundle, Some(&trusted), &healthy_runner());
+    assert_eq!(
+        check(&output, "toolchain-descriptor").code,
+        Some(DoctorCheckCode::ToolchainDescriptorInvalid)
+    );
+    let _ = fs::remove_dir_all(&bundle.root);
+}
+
+#[test]
+fn descriptor_libraries_must_be_listed_in_the_manifest() {
+    let bundle = build_bundle("dll-unlisted");
+    let trusted = rewrite_descriptor(&bundle, |descriptor| {
+        descriptor["sharedLibraries"]
+            .as_array_mut()
+            .expect("libraries")
+            .push(serde_json::json!({
+                "path": "bin/extra.dll",
+                "sha256": digest('8').as_str(),
+            }));
+    });
+    let output = doctor(&bundle, Some(&trusted), &healthy_runner());
+    assert_eq!(
+        check(&output, "toolchain-descriptor").code,
+        Some(DoctorCheckCode::ToolchainDescriptorInvalid)
+    );
+    let _ = fs::remove_dir_all(&bundle.root);
+}
+
 #[cfg(unix)]
 #[test]
 fn listed_symlinked_file_fails_bundle_files() {

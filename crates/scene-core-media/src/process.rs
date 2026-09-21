@@ -129,9 +129,14 @@ pub fn run(spec: &ProcessSpec) -> Result<ProcessOutput, ProcessError> {
                 let _ = child.kill();
             }
         }
-        match child.try_wait().map_err(ProcessError::Wait)? {
-            Some(status) => break status,
-            None => std::thread::sleep(Duration::from_millis(5)),
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => std::thread::sleep(Duration::from_millis(5)),
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(ProcessError::Wait(error));
+            }
         }
     };
 
