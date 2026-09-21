@@ -29,6 +29,8 @@
 1. 由用户/法律确认接受 LGPL-3.0-or-later 义务；或
 2. 切换到仓库自建 `--disable-version3` 构建并更新 lock、能力基线、SBOM 与许可材料。
 
+复审材料（事实、义务对照、选项与决策清单）见 [FFmpeg 工具链对外分发许可复审材料](../legal/ffmpeg-lgpl-review.md)。
+
 ## 参考
 
 - `packaging/toolchains/x86_64-pc-windows-msvc/toolchain.lock.json`（`license` 段）

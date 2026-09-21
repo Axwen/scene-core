@@ -27,6 +27,7 @@
 需要用户/法律确认：
 
 - 该候选构建使用 `--enable-version3`，实际许可档位是 **LGPL-3.0-or-later**（不是 package manifest 示例中的 LGPL-2.1-or-later）。仍属 LGPL、无 GPL/nonfree 组件。决策与复审门禁已记入 [ADR-0001](../adr/0001-windows-toolchain-license.md)：当前内部使用；对外分发前由用户/法律确认或切换自建 `--disable-version3` 构建。
+- 2026-09-21 复审材料已备妥：[ffmpeg-lgpl-review.md](../legal/ffmpeg-lgpl-review.md)（义务对照、选项 A/B、验证命令与决策清单）。已识别的随包缺口：GPLv3 正文、copyright notices、面向收件人的 source offer 说明；均属“选 A 后补齐”的最小变更。
 
 未完成：
 

@@ -53,7 +53,7 @@ P0 不实现真实 `run` 媒体操作、probe、preview、PCM、shot/scene 检�
 
 ### 仍然开放（不阻塞 P0 结项）
 
-1. **对外分发前的许可复审**：接受 LGPL-3.0-or-later 或切自建 `--disable-version3`（ADR-0001 复审门禁）。
+1. **对外分发前的许可复审**：接受 LGPL-3.0-or-later 或切自建 `--disable-version3`（ADR-0001 复审门禁）。2026-09-21 材料已备妥（[ffmpeg-lgpl-review.md](../legal/ffmpeg-lgpl-review.md)：义务对照、选项、验证命令、决策清单与 GPLv3 正文/notices/source offer 缺口），待用户/法律确认。
 2. 静态 CRT 新构件建议在干净 Windows 上重跑一次 `version`/`doctor` 正向命令留档。
 3. 聚焦 Eng Review：本 Epic 完成定义要求无阻断项；建议由用户按既有审查流程执行（可基于本表证据复核）。
 4. P1 Engine Core 已在 [SC-P1-EPIC](SC-P1-EPIC.md) 中拆分并完成首轮实现；Windows 条件测试和后续 P2 门禁仍按该 Epic 跟踪。
