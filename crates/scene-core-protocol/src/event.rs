@@ -153,8 +153,12 @@ impl EventEnvelope {
                     ));
                 }
                 result.validate()?;
-                if let OperationResult::ExtractPreview(preview) = result {
-                    let manifest = &preview.artifact_manifest;
+                let manifest = match result {
+                    OperationResult::Probe(_) => None,
+                    OperationResult::ExtractPreview(preview) => Some(&preview.artifact_manifest),
+                    OperationResult::ExtractAudioPcm(audio) => Some(&audio.artifact_manifest),
+                };
+                if let Some(manifest) = manifest {
                     if manifest.request_id != self.request_id
                         || manifest.source_version_id != self.source_version_id
                         || manifest.input_fingerprint != self.input_fingerprint

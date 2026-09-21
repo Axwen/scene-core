@@ -48,12 +48,31 @@ impl ExtractPreviewResult {
     }
 }
 
+/// Completed result of `extract_audio_pcm`. Same shape as the preview result:
+/// the normalized snapshot, the Manifest of the extracted track and resource
+/// accounting.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct ExtractAudioPcmResult {
+    pub media: NormalizedMedia,
+    pub artifact_manifest: ArtifactManifest,
+    pub resource_usage: ResourceUsage,
+}
+
+impl ExtractAudioPcmResult {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        self.media.validate()?;
+        self.artifact_manifest.validate()
+    }
+}
+
 /// Tagged union of completed results, tagged by `operation`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "operation", rename_all = "snake_case")]
 pub enum OperationResult {
     Probe(ProbeResult),
     ExtractPreview(Box<ExtractPreviewResult>),
+    ExtractAudioPcm(Box<ExtractAudioPcmResult>),
 }
 
 impl OperationResult {
@@ -61,6 +80,7 @@ impl OperationResult {
         match self {
             OperationResult::Probe(_) => Operation::Probe,
             OperationResult::ExtractPreview(_) => Operation::ExtractPreview,
+            OperationResult::ExtractAudioPcm(_) => Operation::ExtractAudioPcm,
         }
     }
 
@@ -68,6 +88,7 @@ impl OperationResult {
         match self {
             OperationResult::Probe(result) => result.validate(),
             OperationResult::ExtractPreview(result) => result.validate(),
+            OperationResult::ExtractAudioPcm(result) => result.validate(),
         }
     }
 }

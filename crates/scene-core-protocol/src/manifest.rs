@@ -15,14 +15,46 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub enum ArtifactKind {
     PreviewFrame,
+    AudioPcm,
 }
 
-/// Fixed diagnostic preview roles.
+/// Fixed artifact roles: diagnostic preview frames and the extracted audio
+/// track.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ArtifactRole {
     Opening,
     Midpoint,
+    Audio,
+}
+
+/// Audio-specific mapping fields. Present exactly on `audioPcm` artifacts.
+/// `presentation_time_ms` carries the material time of the first output
+/// sample; these fields complete the mapping
+/// `materialTime = presentationTimeMs + sampleIndex / sampleRate`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct AudioPcmInfo {
+    pub sample_rate: u32,
+    pub channels: u32,
+    pub sample_count: u64,
+}
+
+impl AudioPcmInfo {
+    pub fn validate_at(&self, path: &str) -> Result<(), ValidationError> {
+        for (field, value) in [
+            ("sampleRate", self.sample_rate),
+            ("channels", self.channels),
+        ] {
+            if value == 0 {
+                return Err(ValidationError::new(
+                    format!("{path}.{field}"),
+                    "must be positive",
+                ));
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -37,6 +69,8 @@ pub struct Artifact {
     pub content_hash: Sha256Digest,
     pub requested_time_ms: u64,
     pub presentation_time_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio_pcm: Option<AudioPcmInfo>,
     pub pixel_width: Option<u32>,
     pub pixel_height: Option<u32>,
 }
@@ -54,6 +88,9 @@ impl Artifact {
                     "must be positive when known, or null",
                 ));
             }
+        }
+        if let Some(audio) = &self.audio_pcm {
+            audio.validate_at(path)?;
         }
         Ok(())
     }
@@ -86,10 +123,13 @@ impl ArtifactManifest {
             ));
         }
         self.engine.validate()?;
-        if self.operation != Operation::ExtractPreview {
+        if !matches!(
+            self.operation,
+            Operation::ExtractPreview | Operation::ExtractAudioPcm
+        ) {
             return Err(ValidationError::new(
                 "operation",
-                "Protocol 0.1 Manifests only describe extract_preview",
+                "Protocol 0.1 Manifests only describe extract_preview and extract_audio_pcm",
             ));
         }
         if !self
@@ -135,7 +175,11 @@ impl ArtifactManifest {
         for (position, artifact) in self.artifacts.iter().enumerate() {
             artifact.validate_at(&format!("artifacts[{position}]"))?;
         }
-        self.validate_preview_artifacts()
+        match self.operation {
+            Operation::ExtractPreview => self.validate_preview_artifacts(),
+            Operation::ExtractAudioPcm => self.validate_audio_artifacts(),
+            _ => unreachable!("operation was checked above"),
+        }
     }
 
     /// Engine-side identity pair used to recompute this Manifest's key.
@@ -143,6 +187,20 @@ impl ArtifactManifest {
         DerivationIdentity {
             engine_cache_compatibility_id: self.engine.engine_cache_compatibility_id.clone(),
             toolchain_fingerprint: self.toolchain_fingerprint.clone(),
+        }
+    }
+
+    fn validate_audio_artifacts(&self) -> Result<(), ValidationError> {
+        const AUDIO: AudioSlot = AudioSlot {
+            artifact_id: "audio-pcm",
+            relative_ref: "output/audio/track.wav",
+        };
+        match self.artifacts.as_slice() {
+            [audio] => audio.validate_audio_slot(0, &AUDIO),
+            _ => Err(ValidationError::new(
+                "artifacts",
+                "must contain exactly one PCM audio artifact",
+            )),
         }
     }
 
@@ -174,6 +232,11 @@ impl ArtifactManifest {
 struct PreviewSlot {
     artifact_id: &'static str,
     role: ArtifactRole,
+    relative_ref: &'static str,
+}
+
+struct AudioSlot {
+    artifact_id: &'static str,
     relative_ref: &'static str,
 }
 
@@ -226,6 +289,12 @@ impl Artifact {
                 "must be known for a preview frame",
             ));
         }
+        if self.audio_pcm.is_some() {
+            return Err(ValidationError::new(
+                format!("{path}.audioPcm"),
+                "must be absent from preview artifacts",
+            ));
+        }
         match slot.role {
             ArtifactRole::Opening if self.requested_time_ms != 0 => {
                 return Err(ValidationError::new(
@@ -240,6 +309,75 @@ impl Artifact {
                 ));
             }
             _ => {}
+        }
+        Ok(())
+    }
+
+    fn validate_audio_slot(
+        &self,
+        position: usize,
+        slot: &AudioSlot,
+    ) -> Result<(), ValidationError> {
+        let path = format!("artifacts[{position}]");
+        if self.artifact_id.as_str() != slot.artifact_id {
+            return Err(ValidationError::new(
+                format!("{path}.artifactId"),
+                format!("must be '{}'", slot.artifact_id),
+            ));
+        }
+        if self.role != ArtifactRole::Audio {
+            return Err(ValidationError::new(
+                format!("{path}.role"),
+                "must be 'audio'",
+            ));
+        }
+        if self.kind != ArtifactKind::AudioPcm {
+            return Err(ValidationError::new(
+                format!("{path}.kind"),
+                "must be 'audioPcm'",
+            ));
+        }
+        if self.media_type.as_str() != "audio/wav" {
+            return Err(ValidationError::new(
+                format!("{path}.mediaType"),
+                "must be 'audio/wav'",
+            ));
+        }
+        if self.relative_ref.as_str() != slot.relative_ref {
+            return Err(ValidationError::new(
+                format!("{path}.relativeRef"),
+                format!("must be '{}'", slot.relative_ref),
+            ));
+        }
+        if self.byte_size == 0 {
+            return Err(ValidationError::new(
+                format!("{path}.byteSize"),
+                "must be positive for an audio artifact",
+            ));
+        }
+        if self.requested_time_ms != 0 {
+            return Err(ValidationError::new(
+                format!("{path}.requestedTimeMs"),
+                "must be 0: the audio operation has no trim window in Protocol 0.1",
+            ));
+        }
+        if self.presentation_time_ms.is_none() {
+            return Err(ValidationError::new(
+                format!("{path}.presentationTimeMs"),
+                "must carry the material time of the first output sample",
+            ));
+        }
+        if self.audio_pcm.is_none() {
+            return Err(ValidationError::new(
+                format!("{path}.audioPcm"),
+                "must carry sampleRate, channels and sampleCount",
+            ));
+        }
+        if self.pixel_width.is_some() || self.pixel_height.is_some() {
+            return Err(ValidationError::new(
+                format!("{path}.pixelWidth/pixelHeight"),
+                "must be absent from audio artifacts",
+            ));
         }
         Ok(())
     }

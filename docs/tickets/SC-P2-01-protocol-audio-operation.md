@@ -21,6 +21,13 @@
 3. `derivationKey` 覆盖 `audioStreamIndex`（不同选项产生不同 key）。
 4. Schema drift 门禁通过；fixture conformance 通过；既有 probe/preview 用例不回归。
 
+## 实现状态（2026-09-21）
+
+- `Operation::ExtractAudioPcm`（`extract-audio-pcm-result/1`）、`OperationOptions` 联合（`EmptyOptions` / `AudioPcmOptions`，手工 `Deserialize` 强制对象形态并拒绝未知/重复键）、`ExtractAudioPcmResult`、`ArtifactKind::AudioPcm`、`ArtifactRole::Audio`、`Artifact.audioPcm`、`ErrorCode::MissingAudioStream` 已实现。
+- Manifest 按 operation 分支校验音频槽位；`completed` 身份回传覆盖音频结果。
+- Schema 重生成（15 个错误码、新 operation/options/result/artifact）；新增 8 个 fixture（含 golden transcript），fixture 总数 81。
+- 测试：protocol 9 个目标全绿（options 正反、音频 Manifest 正反、身份回传、`ALL.len()==15`）。
+
 ## 依赖
 
 无。

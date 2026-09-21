@@ -1,0 +1,39 @@
+{
+  "manifestVersion": "0.1",
+  "requestId": "req_01",
+  "sourceVersionId": "sourcev_01",
+  "inputFingerprint": "sha256:ceaeaa5c772ab1951c10a0c86f5dd51c5a14987fc8d8ea153c501e645cfc9598",
+  "derivationKey": "sha256:6f8ffdbf30f5ace4a7a91b16be250f4a7a4be0f2754dc175ce978fe1f0a25102",
+  "operation": "extract_audio_pcm",
+  "operationConfigHash": "sha256:585f94b6d70940ef1da5877c44174f605239df18b5bbebfa9a3c800d39e5f90f",
+  "outputContractVersion": "extract-audio-pcm-result/1",
+  "engine": {
+    "engineVersion": "0.1.0-alpha.1",
+    "engineCommit": "0123456789abcdef0123456789abcdef01234567",
+    "target": "x86_64-pc-windows-msvc",
+    "engineCacheCompatibilityId": "scene-core-output-v1",
+    "supportedProtocolVersions": [
+      "0.1"
+    ],
+    "implementedOperations": []
+  },
+  "toolchainFingerprint": "sha256:abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+  "artifacts": [
+    {
+      "artifactId": "audio-pcm",
+      "kind": "audioPcm",
+      "role": "audio",
+      "mediaType": "audio/wav",
+      "relativeRef": "output/audio/track.wav",
+      "byteSize": 96044,
+      "contentHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "requestedTimeMs": 0,
+      "presentationTimeMs": 80,
+      "audioPcm": {
+        "sampleRate": 48000,
+        "channels": 2,
+        "sampleCount": 48000
+      }
+    }
+  ]
+}

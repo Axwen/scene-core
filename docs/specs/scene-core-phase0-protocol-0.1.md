@@ -182,7 +182,7 @@ stdin 是 UTF-8、无 BOM、每行一个 JSON object 的控制流；单行硬上
 - `ref` 与 Manifest 的 `relativeRef` 必须满足安全相对引用形式：不得为绝对路径、Windows 盘符、UNC、ADS、包含 `..` 或 `.` 段、反斜杠或控制字符，单字段上限 1024 字节；`0.1` 的输入 `ref` 只能精确等于 `input/source.media`。
 - Host-facing `StartRequest` 的 `executionContext` 必填，四个字段必须齐全。`generation >= 0`，`attempt >= 1`，`scope` 为 `asset | query | evaluation`；仅不经过引擎请求协议的 `version`/`doctor` CLI 不携带它。
 - `deadlineMs` 可省略，默认 120000；范围为 `1..600000`。
-- `probe` 和 `extract_preview` 在 `0.1` 的调用方 options 都必须是空对象 `{}`；含任意键、重复键或非对象形态（如数组）在解析阶段即被拒绝。可配置行为通过新协议版本增加，不预留任意键。
+- `probe` 和 `extract_preview` 在 `0.1` 的调用方 options 都必须是空对象 `{}`；`extract_audio_pcm` 接受可选 `audioStreamIndex`。含未注册键、重复键或非对象形态（如数组）在解析阶段即被拒绝；选项形状与 operation 不匹配属于 `INVALID_REQUEST`。可配置行为通过新协议版本增加，不预留任意键。完整音频线格式见 [extract_audio_pcm 操作规格](extract-audio-pcm.md)。
 
 #### CancelRequest
 
@@ -281,6 +281,7 @@ INPUT_CHANGED
 UNSUPPORTED_INPUT
 CORRUPT_MEDIA
 MISSING_VIDEO_STREAM
+MISSING_AUDIO_STREAM
 RESOURCE_LIMIT
 TOOL_UNAVAILABLE
 TOOL_FAILED
@@ -296,7 +297,9 @@ ENGINE_INTERNAL
 
 ### 7. Reserved Operation Results
 
-Phase 0 冻结 `probe` 与 `extract_preview` 的标识和结果边界，但不实现操作。`version --json` 必须通过 `implementedOperations` 如实报告当前为空；不得伪报 capability。
+Phase 0 冻结 `probe` 与 `extract_preview` 的标识和结果边界，但不实现操作。`version --json` 必须通过 `implementedOperations` 如实报告当前能力；不得伪报 capability。
+
+0.1 候选扩展新增 `extract_audio_pcm`（[操作规格](extract-audio-pcm.md)）：整轨 PCM WAV `s16le`、保持源采样率与声道、可选 `audioStreamIndex`；结果与预览同形，Artifact 固定为 `audio-pcm` / `output/audio/track.wav` / `audio/wav`，并携带 `presentationTimeMs`（实际首个输出样本的素材时间）与 `audioPcm { sampleRate, channels, sampleCount }`。既有 `probe`/`extract_preview` 线格式不变；被消费者固定后需新协议版本。
 
 #### Probe result
 

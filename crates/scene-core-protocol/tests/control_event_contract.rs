@@ -3,15 +3,17 @@
 mod common;
 
 use common::{
-    EMPTY_OPTIONS_HASH, TOOLCHAIN_FINGERPRINT, derivation_descriptor, derivation_identity,
-    engine_identity, input_set, midpoint_artifact, minimal_media, preview_artifact, probe_result,
-    sha, start_request,
+    EMPTY_OPTIONS_HASH, TOOLCHAIN_FINGERPRINT, audio_artifact, audio_manifest,
+    derivation_descriptor, derivation_identity, engine_identity, input_set, midpoint_artifact,
+    minimal_media, preview_artifact, probe_result, sha, start_request,
 };
 use scene_core_protocol::{
-    Artifact, ArtifactManifest, CancelMessageType, CancelRequest, ControlMessage, ErrorCode,
-    EventEnvelope, EventMessageType, EventStreamValidator, EventType, ExecutionScope,
-    ExtractPreviewResult, Identifier, Operation, OutputContractVersion, ProtocolError,
-    ProtocolVersion, ResourceUsage, StageName, StartRequest, UtcTimestamp, parse_control_line,
+    Artifact, ArtifactKind, ArtifactManifest, AudioPcmInfo, AudioPcmOptions, CancelMessageType,
+    CancelRequest, ControlMessage, DerivationDescriptor, ErrorCode, EventEnvelope,
+    EventMessageType, EventStreamValidator, EventType, ExecutionScope, ExtractAudioPcmResult,
+    ExtractPreviewResult, Identifier, Operation, OperationOptions, OperationResult,
+    OutputContractVersion, ProtocolError, ProtocolVersion, RelativeRef, ResourceUsage, StageName,
+    StartRequest, UtcTimestamp, canonical_sha256, parse_control_line,
 };
 
 fn probe_request() -> StartRequest {
@@ -552,6 +554,129 @@ fn preview_requested_times_are_pinned_to_their_slots() {
             .validate()
             .is_err()
     );
+}
+
+#[test]
+fn extract_audio_pcm_request_accepts_its_options() {
+    let mut request = probe_request();
+    request.operation = Operation::ExtractAudioPcm;
+    request.output_contract_version = Operation::ExtractAudioPcm.output_contract_version();
+    request.options = OperationOptions::ExtractAudioPcm(AudioPcmOptions {
+        audio_stream_index: Some(1),
+    });
+    let config_hash = canonical_sha256(&serde_json::json!({"audioStreamIndex": 1})).expect("hash");
+    request.operation_config_hash = config_hash.clone();
+    let identity = derivation_identity();
+    request.derivation_key = DerivationDescriptor {
+        derivation_descriptor_version: scene_core_protocol::DescriptorVersion::current(),
+        input_fingerprint: request.input_fingerprint.clone(),
+        operation: Operation::ExtractAudioPcm,
+        operation_config_hash: config_hash,
+        output_contract_version: Operation::ExtractAudioPcm.output_contract_version(),
+        engine_cache_compatibility_id: identity.engine_cache_compatibility_id.clone(),
+        toolchain_fingerprint: identity.toolchain_fingerprint.clone(),
+    }
+    .derive_key()
+    .expect("key");
+    assert!(request.validate().is_ok());
+    assert_eq!(request.options.audio_stream_index(), Some(1));
+    assert!(request.validate_derivation(&identity).is_ok());
+
+    // A different stream index is a different effective config.
+    let mut other = request.clone();
+    other.options = OperationOptions::ExtractAudioPcm(AudioPcmOptions {
+        audio_stream_index: Some(2),
+    });
+    other.operation_config_hash =
+        canonical_sha256(&serde_json::json!({"audioStreamIndex": 2})).expect("hash");
+    assert!(other.validate().is_ok());
+    assert!(
+        other.validate_derivation(&identity).is_err(),
+        "stale derivation key must fail"
+    );
+}
+
+#[test]
+fn audio_options_are_rejected_on_other_operations() {
+    let mut request = probe_request();
+    request.options = OperationOptions::ExtractAudioPcm(AudioPcmOptions {
+        audio_stream_index: Some(1),
+    });
+    let error = request.validate().expect_err("options mismatch");
+    assert_eq!(error.code, ErrorCode::InvalidRequest);
+}
+
+#[test]
+fn audio_manifest_pins_its_slot_and_mapping_fields() {
+    assert!(audio_manifest(vec![audio_artifact()]).validate().is_ok());
+
+    let mut no_mapping = audio_manifest(vec![audio_artifact()]);
+    no_mapping.artifacts[0].audio_pcm = None;
+    assert!(no_mapping.validate().is_err());
+
+    let mut no_start = audio_manifest(vec![audio_artifact()]);
+    no_start.artifacts[0].presentation_time_ms = None;
+    assert!(no_start.validate().is_err());
+
+    let mut trimmed = audio_manifest(vec![audio_artifact()]);
+    trimmed.artifacts[0].requested_time_ms = 1_000;
+    assert!(trimmed.validate().is_err());
+
+    let mut zero_rate = audio_manifest(vec![audio_artifact()]);
+    zero_rate.artifacts[0].audio_pcm = Some(AudioPcmInfo {
+        sample_rate: 0,
+        channels: 2,
+        sample_count: 10,
+    });
+    assert!(zero_rate.validate().is_err());
+
+    let mut wrong_kind = audio_manifest(vec![audio_artifact()]);
+    wrong_kind.artifacts[0].kind = ArtifactKind::PreviewFrame;
+    assert!(wrong_kind.validate().is_err());
+
+    let mut wrong_ref = audio_manifest(vec![audio_artifact()]);
+    wrong_ref.artifacts[0].relative_ref = RelativeRef::new("output/audio/other.wav").expect("ref");
+    assert!(wrong_ref.validate().is_err());
+
+    let mut two = audio_manifest(vec![audio_artifact(), audio_artifact()]);
+    two.artifacts[1].artifact_id = Identifier::new("audio-pcm-2").expect("id");
+    assert!(two.validate().is_err());
+
+    let mut preview_with_audio = manifest(vec![preview_artifact()]);
+    preview_with_audio.artifacts[0].audio_pcm = Some(AudioPcmInfo {
+        sample_rate: 48_000,
+        channels: 2,
+        sample_count: 10,
+    });
+    assert!(preview_with_audio.validate().is_err());
+}
+
+#[test]
+fn completed_audio_manifest_must_echo_the_event_identity() {
+    let audio = audio_manifest(vec![audio_artifact()]);
+    let mut event = accepted_event();
+    event.operation = Operation::ExtractAudioPcm;
+    event.derivation_key = audio.derivation_key.clone();
+    event.event_type = EventType::Completed;
+    event.sequence = 2;
+    event.result = Some(OperationResult::ExtractAudioPcm(Box::new(
+        ExtractAudioPcmResult {
+            media: minimal_media(),
+            artifact_manifest: audio,
+            resource_usage: ResourceUsage {
+                wall_time_ms: 5,
+                cpu_time_ms: None,
+                peak_memory_bytes: None,
+            },
+        },
+    )));
+    assert!(event.validate().is_ok());
+
+    let mut tampered = event;
+    if let Some(OperationResult::ExtractAudioPcm(audio)) = tampered.result.as_mut() {
+        audio.artifact_manifest.request_id = Identifier::new("req_evil").expect("id");
+    }
+    assert!(tampered.validate().is_err());
 }
 
 #[test]

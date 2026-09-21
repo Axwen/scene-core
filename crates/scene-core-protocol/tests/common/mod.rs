@@ -74,8 +74,51 @@ pub fn preview_artifact() -> Artifact {
         content_hash: sha(TOOLCHAIN_FINGERPRINT),
         requested_time_ms: 0,
         presentation_time_ms: None,
+        audio_pcm: None,
         pixel_width: Some(512),
         pixel_height: Some(288),
+    }
+}
+
+pub fn audio_artifact() -> Artifact {
+    Artifact {
+        artifact_id: Identifier::new("audio-pcm").expect("id"),
+        kind: ArtifactKind::AudioPcm,
+        role: ArtifactRole::Audio,
+        media_type: MediaType::new("audio/wav").expect("media type"),
+        relative_ref: RelativeRef::new("output/audio/track.wav").expect("ref"),
+        byte_size: 96_044,
+        content_hash: sha(TOOLCHAIN_FINGERPRINT),
+        requested_time_ms: 0,
+        presentation_time_ms: Some(80),
+        audio_pcm: Some(AudioPcmInfo {
+            sample_rate: 48_000,
+            channels: 2,
+            sample_count: 48_000,
+        }),
+        pixel_width: None,
+        pixel_height: None,
+    }
+}
+
+pub fn audio_manifest(artifacts: Vec<Artifact>) -> ArtifactManifest {
+    let input_fingerprint = input_set().input_fingerprint().expect("fingerprint");
+    let operation = Operation::ExtractAudioPcm;
+    let derivation_key = derivation_descriptor(input_fingerprint.clone(), operation)
+        .derive_key()
+        .expect("key");
+    ArtifactManifest {
+        manifest_version: ProtocolVersion::current(),
+        request_id: Identifier::new("req_01").expect("id"),
+        source_version_id: Identifier::new("sourcev_01").expect("id"),
+        input_fingerprint,
+        derivation_key,
+        operation,
+        operation_config_hash: sha(EMPTY_OPTIONS_HASH),
+        output_contract_version: operation.output_contract_version(),
+        engine: engine_identity(),
+        toolchain_fingerprint: sha(TOOLCHAIN_FINGERPRINT),
+        artifacts,
     }
 }
 
@@ -142,6 +185,6 @@ pub fn start_request(request_id: &str, source_version_id: &str) -> StartRequest 
             scope: ExecutionScope::Asset,
         },
         deadline_ms: None,
-        options: OperationOptions {},
+        options: OperationOptions::default(),
     }
 }

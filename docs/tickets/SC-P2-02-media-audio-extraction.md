@@ -25,6 +25,12 @@
 2. `wav_info` 单元测试覆盖截断头、非 WAV、奇数 data 大小。
 3. `media_acceptance` 用已知 tone 起点验证 `presentationTimeMs + n/sampleRate` 与事件偏差在 1 ms 内。
 
+## 实现状态（2026-09-21）
+
+- `scene-core-media/src/audio.rs`：`extract`（`-map 0:<index>`、`-vn/-sn/-dn`、`pcm_s16le`、WAV）、`wav_info`（只读 RIFF/fmt/data 头）、`estimate_output_bytes`、`MAX_OUTPUT_BYTES`（2 GiB）。
+- 单元测试：WAV 头正反、输出估算；合同测试 `tests/audio_contract.rs`：单轨映射、双轨选择（48k/8k）、取消。
+- 未做（归 SC-P2-04/后置）：编码延迟的真实样本核验、连续性与时间戳复位的深度检测（当前为流起点缺失拒绝 + 时长粗差拒绝）。
+
 ## 依赖
 
 SC-P2-01。

@@ -15,6 +15,7 @@ pub enum ErrorCode {
     UnsupportedInput,
     CorruptMedia,
     MissingVideoStream,
+    MissingAudioStream,
     ResourceLimit,
     ToolUnavailable,
     ToolFailed,
@@ -24,8 +25,8 @@ pub enum ErrorCode {
 }
 
 impl ErrorCode {
-    /// Every code frozen by Protocol 0.1, in contract order.
-    pub const ALL: [ErrorCode; 14] = [
+    /// Every code registered by Protocol 0.1, in contract order.
+    pub const ALL: [ErrorCode; 15] = [
         ErrorCode::InvalidRequest,
         ErrorCode::UnsupportedProtocol,
         ErrorCode::OperationUnavailable,
@@ -34,6 +35,7 @@ impl ErrorCode {
         ErrorCode::UnsupportedInput,
         ErrorCode::CorruptMedia,
         ErrorCode::MissingVideoStream,
+        ErrorCode::MissingAudioStream,
         ErrorCode::ResourceLimit,
         ErrorCode::ToolUnavailable,
         ErrorCode::ToolFailed,
@@ -58,6 +60,7 @@ impl ErrorCode {
             ErrorCode::UnsupportedInput
             | ErrorCode::CorruptMedia
             | ErrorCode::MissingVideoStream
+            | ErrorCode::MissingAudioStream
             | ErrorCode::ResourceLimit
             | ErrorCode::ToolFailed => 3,
             ErrorCode::Timeout => 124,
@@ -88,6 +91,7 @@ impl ErrorCode {
             ErrorCode::UnsupportedInput => "UNSUPPORTED_INPUT",
             ErrorCode::CorruptMedia => "CORRUPT_MEDIA",
             ErrorCode::MissingVideoStream => "MISSING_VIDEO_STREAM",
+            ErrorCode::MissingAudioStream => "MISSING_AUDIO_STREAM",
             ErrorCode::ResourceLimit => "RESOURCE_LIMIT",
             ErrorCode::ToolUnavailable => "TOOL_UNAVAILABLE",
             ErrorCode::ToolFailed => "TOOL_FAILED",
@@ -274,7 +278,7 @@ mod tests {
 
     #[test]
     fn code_matrix_is_complete_and_consistent() {
-        assert_eq!(ErrorCode::ALL.len(), 14);
+        assert_eq!(ErrorCode::ALL.len(), 15);
         for code in ErrorCode::ALL {
             let error = ProtocolError::new(code, "safe message");
             assert_eq!(error.retryable, code.retryable());

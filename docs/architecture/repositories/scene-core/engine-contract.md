@@ -76,6 +76,7 @@ Boot -> Accepted -> Running -> Completed | Failed | Cancelled | TimedOut
 | `UNSUPPORTED_INPUT` | `failed` | 否 | 3 | 媒体格式不受支持 |
 | `CORRUPT_MEDIA` | `failed` | 否 | 3 | 媒体损坏或无法解析 |
 | `MISSING_VIDEO_STREAM` | `failed` | 否 | 3 | operation 需要视频但不存在 |
+| `MISSING_AUDIO_STREAM` | `failed` | 否 | 3 | operation 需要音频但不存在，或指定轨道不是非附件音频流 |
 | `RESOURCE_LIMIT` | `failed` | 是 | 3 | 超过明确资源边界 |
 | `TOOL_UNAVAILABLE` | `failed` | 是 | 2 | 固定工具或 DLL 不可用 |
 | `TOOL_FAILED` | `failed` | 是 | 3 | 固定工具返回失败 |

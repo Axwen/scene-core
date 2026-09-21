@@ -26,7 +26,7 @@ if (-not $versionJson.toolchainFingerprint) { throw "toolchainFingerprint is mis
 $manifestJson = Get-Content (Join-Path $BundleRoot "package-manifest.json") -Raw | ConvertFrom-Json
 $operations = @($versionJson.implementedOperations)
 foreach ($operation in $operations) {
-    if ($operation -notin @("probe", "extract_preview")) {
+    if ($operation -notin @("probe", "extract_preview", "extract_audio_pcm")) {
         throw "unknown implemented operation: $operation"
     }
 }

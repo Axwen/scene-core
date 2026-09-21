@@ -27,6 +27,10 @@
 | [SC-P2-03](SC-P2-03-engine-audio-dispatch.md) | engine 分发、进度、Manifest 校验与身份对齐 | SC-P2-01、SC-P2-02 |
 | [SC-P2-04](SC-P2-04-audio-acceptance.md) | 合成/真实样本验收与映射验证、资源与性能 | SC-P2-02、SC-P2-03 |
 
+## 状态（2026-09-21）
+
+SC-P2-01/02/03 已实现并通过本地门禁；SC-P2-04（真实/合成样本验收、映射偏差记录、性能门禁接入）待执行。
+
 ## 完成定义
 
 - 四个 ticket 验收通过；`version --json` 如实报告 `implementedOperations: ["probe","extract_preview","extract_audio_pcm"]`。
