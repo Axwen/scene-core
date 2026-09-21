@@ -4,17 +4,17 @@
 use scene_core_media::audio::{self, AudioError};
 use scene_core_media::hash::{hash_file, hash_file_cancellable};
 use scene_core_media::preview::{self, PreviewError};
-use scene_core_media::probe::{ProbeError, probe_with_cancel};
+use scene_core_media::probe::{ProbeError, probe_with_cancel, probe_with_origin};
 use scene_core_media::staging::StagingRoot;
 use scene_core_media::toolchain::Toolchain;
 use scene_core_protocol::{
-    Artifact, ArtifactKind, ArtifactManifest, ArtifactRole, AudioPcmInfo, ControlMessage,
-    ControlStreamValidator, DerivationIdentity, EngineIdentity, ErrorCode, EventEnvelope,
-    EventMessageType, EventType, ExecutionContext, ExtractAudioPcmResult, ExtractPreviewResult,
-    Identifier, MediaStream, MediaType, NormalizedMedia, Operation, OperationResult, ProbeResult,
-    ProtocolError, ProtocolVersion, RelativeRef, ResourceUsage, Sha256Digest, StageName,
-    StagedSourceFacts, StartRequest, StreamKind, UtcTimestamp, parse_control_line,
-    verify_staged_source,
+    Artifact, ArtifactKind, ArtifactManifest, ArtifactRole, AudioPcmInfo, AudioPcmOptions,
+    ControlMessage, ControlStreamValidator, DerivationIdentity, EngineIdentity, ErrorCode,
+    EventEnvelope, EventMessageType, EventType, ExecutionContext, ExtractAudioPcmResult,
+    ExtractPreviewResult, Identifier, MediaStream, MediaType, NormalizedMedia, Operation,
+    OperationResult, ProbeResult, ProtocolError, ProtocolVersion, RelativeRef, ResourceUsage,
+    Sha256Digest, StageName, StagedSourceFacts, StartRequest, StreamKind, UtcTimestamp,
+    parse_control_line, verify_staged_source,
 };
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -175,7 +175,7 @@ pub trait MediaBackend {
         &self,
         staging: &StagingRoot,
         control: &RunControl,
-        audio_stream_index: Option<u32>,
+        options: Option<&AudioPcmOptions>,
     ) -> Result<AudioPcmOutcome, MediaFailure>;
 }
 
@@ -204,7 +204,7 @@ impl MediaBackend for UnavailableBackend {
         &self,
         _staging: &StagingRoot,
         _control: &RunControl,
-        _audio_stream_index: Option<u32>,
+        _options: Option<&AudioPcmOptions>,
     ) -> Result<AudioPcmOutcome, MediaFailure> {
         Err(MediaFailure::ToolUnavailable)
     }
@@ -333,18 +333,25 @@ impl MediaBackend for ProbeBackend {
         &self,
         staging: &StagingRoot,
         control: &RunControl,
-        audio_stream_index: Option<u32>,
+        options: Option<&AudioPcmOptions>,
     ) -> Result<AudioPcmOutcome, MediaFailure> {
         let input = staging.input();
-        let probed = probe_with_cancel(&self.toolchain, &input, Some(control.process_flag()))
+        let probed = probe_with_origin(&self.toolchain, &input, Some(control.process_flag()))
             .map_err(|error| classify_probe_error(error, control))?;
-        // A material-time mapping needs the container origin and the stream
-        // start; unknown values fail the operation instead of guessing.
-        if probed.container.start_time_ms.is_none() {
+        // A material-time mapping needs the raw container origin and the
+        // stream start; unknown values fail the operation instead of guessing.
+        let Some(origin) = probed.origin else {
             return Err(MediaFailure::UnsupportedInput);
-        }
-        let index = select_audio_stream(&probed.streams, audio_stream_index)?;
-        let stream = probed
+        };
+        let origin_ms = origin
+            .to_ms_round_nearest()
+            .map_err(|_| MediaFailure::UnsupportedInput)?;
+        let media = probed.media;
+        let index = select_audio_stream(
+            &media.streams,
+            options.and_then(|options| options.audio_stream_index),
+        )?;
+        let stream = media
             .streams
             .iter()
             .find(|stream| stream.index == index)
@@ -352,12 +359,34 @@ impl MediaBackend for ProbeBackend {
         let Some(stream_start_ms) = stream.start_time_ms else {
             return Err(MediaFailure::UnsupportedInput);
         };
-        let duration_ms = stream.duration_ms.or(probed.container.duration_ms);
-        if let Some(duration) = duration_ms {
+        let trim = audio::AudioTrim {
+            start_ms: options.and_then(|options| options.start_ms),
+            end_ms: options.and_then(|options| options.end_ms),
+            sample_rate: options.and_then(|options| options.sample_rate),
+            channels: options.and_then(|options| options.channels),
+        };
+        let requested_start_ms = trim.start_ms.unwrap_or(0);
+        let stream_end_ms = stream
+            .duration_ms
+            .map(|duration| {
+                material_start_ms(stream_start_ms)
+                    .unwrap_or(0)
+                    .saturating_add(duration)
+            })
+            .or(media.container.duration_ms);
+        let window_end_ms = trim.end_ms.unwrap_or(u64::MAX).min(
+            stream_end_ms
+                .map(|end| end.max(requested_start_ms))
+                .unwrap_or(u64::MAX),
+        );
+        let window_ms = window_end_ms.saturating_sub(requested_start_ms);
+        if stream_end_ms.is_some() {
             let estimated = audio::estimate_output_bytes(
-                duration,
-                stream.sample_rate.unwrap_or(0),
-                u16::try_from(stream.channels.unwrap_or(0)).unwrap_or(u16::MAX),
+                window_ms,
+                trim.sample_rate.or(stream.sample_rate).unwrap_or(0),
+                trim.channels
+                    .or_else(|| stream.channels.and_then(|value| u16::try_from(value).ok()))
+                    .unwrap_or(0),
             );
             if estimated > audio::MAX_OUTPUT_BYTES {
                 return Err(MediaFailure::ResourceLimit);
@@ -380,15 +409,28 @@ impl MediaBackend for ProbeBackend {
             &self.toolchain,
             &input,
             index,
+            origin_ms,
+            &trim,
             &temporary,
             Some(control.process_flag()),
         )
         .map_err(|error| classify_audio_error(error, control))?;
         std::fs::rename(&temporary, &path).map_err(|_| MediaFailure::Internal)?;
 
-        // Gross continuity guard: a track that decodes to a very different
+        if info.sample_count == 0 {
+            let _ = std::fs::remove_file(&path);
+            return Err(MediaFailure::UnsupportedInput);
+        }
+
+        // Gross continuity guard: a window that decodes to a very different
         // length than the probed stream cannot carry a single mapping.
-        if let Some(expected) = stream.duration_ms {
+        let actual_start_ms = requested_start_ms.max(material_start_ms(stream_start_ms)?);
+        if stream_end_ms.is_some() {
+            // The decoded window must match the requested window (clamped to
+            // the track end), not the whole remaining track.
+            let expected = window_end_ms
+                .max(actual_start_ms)
+                .saturating_sub(actual_start_ms);
             let actual = info.duration_ms();
             let tolerance = (expected / 100).max(1_000);
             if actual.abs_diff(expected) > tolerance {
@@ -401,7 +443,6 @@ impl MediaBackend for ProbeBackend {
             .map_err(|_| MediaFailure::Internal)?
             .len();
         let content_hash = hash_file(&path).map_err(|_| MediaFailure::Internal)?;
-        let actual_start_ms = material_start_ms(stream_start_ms)?;
         let artifact = Artifact {
             artifact_id: Identifier::new("audio-pcm").map_err(|_| MediaFailure::Internal)?,
             kind: ArtifactKind::AudioPcm,
@@ -410,7 +451,7 @@ impl MediaBackend for ProbeBackend {
             relative_ref: reference,
             byte_size,
             content_hash,
-            requested_time_ms: 0,
+            requested_time_ms: requested_start_ms,
             presentation_time_ms: Some(actual_start_ms),
             audio_pcm: Some(AudioPcmInfo {
                 sample_rate: info.sample_rate,
@@ -421,7 +462,7 @@ impl MediaBackend for ProbeBackend {
             pixel_height: None,
         };
         Ok(AudioPcmOutcome {
-            media: probed,
+            media,
             artifacts: vec![artifact],
         })
     }
@@ -728,7 +769,7 @@ pub fn run_session(
                 })
         }
         Operation::ExtractAudioPcm => backend
-            .extract_audio_pcm(staging, control, request.options.audio_stream_index())
+            .extract_audio_pcm(staging, control, request.options.audio_pcm())
             .and_then(|outcome| {
                 let manifest = ArtifactManifest {
                     manifest_version: ProtocolVersion::current(),

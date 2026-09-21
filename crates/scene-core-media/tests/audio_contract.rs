@@ -1,6 +1,6 @@
 //! Audio extraction contract against the locked toolchain.
 
-use scene_core_media::audio::{AudioError, extract, wav_info};
+use scene_core_media::audio::{AudioError, AudioTrim, extract, wav_info};
 use scene_core_media::process::{ProcessSpec, run};
 use scene_core_media::toolchain::Toolchain;
 use std::path::PathBuf;
@@ -64,7 +64,16 @@ fn extracts_pcm_at_the_source_rate() {
         ],
     );
     let output = dir.join("track.wav");
-    let info = extract(&toolchain, &media, 0, &output, None).expect("extract");
+    let info = extract(
+        &toolchain,
+        &media,
+        0,
+        0,
+        &AudioTrim::default(),
+        &output,
+        None,
+    )
+    .expect("extract");
     assert_eq!(info.sample_rate, 48_000);
     assert_eq!(info.channels, 2);
     assert_eq!(info.sample_count, 48_000);
@@ -105,11 +114,29 @@ fn selects_the_requested_track() {
         ],
     );
     let first = dir.join("first.wav");
-    let info = extract(&toolchain, &media, 0, &first, None).expect("first track");
+    let info = extract(
+        &toolchain,
+        &media,
+        0,
+        0,
+        &AudioTrim::default(),
+        &first,
+        None,
+    )
+    .expect("first track");
     assert_eq!((info.sample_rate, info.channels), (48_000, 1));
 
     let second = dir.join("second.wav");
-    let info = extract(&toolchain, &media, 1, &second, None).expect("second track");
+    let info = extract(
+        &toolchain,
+        &media,
+        1,
+        0,
+        &AudioTrim::default(),
+        &second,
+        None,
+    )
+    .expect("second track");
     assert_eq!((info.sample_rate, info.channels), (8_000, 1));
 
     let first_bytes = std::fs::read(&first).expect("read first");
@@ -169,7 +196,16 @@ fn tone_onset_maps_within_one_millisecond() {
         ],
     );
     let output = dir.join("track.wav");
-    let info = extract(&toolchain, &media, 0, &output, None).expect("extract");
+    let info = extract(
+        &toolchain,
+        &media,
+        0,
+        0,
+        &AudioTrim::default(),
+        &output,
+        None,
+    )
+    .expect("extract");
     assert_eq!(info.sample_rate, 48_000);
     assert_eq!(info.channels, 2);
     assert_eq!(info.sample_count, 72_000);
@@ -209,7 +245,123 @@ fn cancellation_stops_the_extraction() {
     );
     let flag = Arc::new(AtomicBool::new(true));
     let output = dir.join("track.wav");
-    let error = extract(&toolchain, &media, 0, &output, Some(flag)).expect_err("cancelled");
+    let error = extract(
+        &toolchain,
+        &media,
+        0,
+        0,
+        &AudioTrim::default(),
+        &output,
+        Some(flag),
+    )
+    .expect_err("cancelled");
     assert_eq!(error, AudioError::Cancelled);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn wav_data(path: &std::path::Path) -> Vec<u8> {
+    let bytes = std::fs::read(path).expect("read wav");
+    let start = bytes
+        .windows(4)
+        .position(|window| window == b"data")
+        .expect("data chunk")
+        + 8;
+    let size = u32::from_le_bytes([
+        bytes[start - 4],
+        bytes[start - 3],
+        bytes[start - 2],
+        bytes[start - 1],
+    ]) as usize;
+    bytes[start..start + size].to_vec()
+}
+
+fn generate_step(toolchain: &Toolchain, output: &std::path::Path) {
+    generate(
+        toolchain,
+        output,
+        &[
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "aevalsrc=0.5*gte(t\\,0.5):s=48000:d=1.5",
+            "-ac",
+            "2",
+            "-c:a",
+            "pcm_s16le",
+            "-f",
+            "matroska",
+        ],
+    );
+}
+
+#[test]
+fn trimmed_frames_match_the_full_track() {
+    let Some(toolchain) = toolchain() else {
+        return;
+    };
+    let dir = temp_dir("trim-bytes");
+    let media = dir.join("step.mkv");
+    generate_step(&toolchain, &media);
+
+    let full = dir.join("full.wav");
+    extract(&toolchain, &media, 0, 0, &AudioTrim::default(), &full, None).expect("full");
+    let trimmed = dir.join("trimmed.wav");
+    let trim = AudioTrim {
+        start_ms: Some(400),
+        end_ms: Some(700),
+        ..AudioTrim::default()
+    };
+    let info = extract(&toolchain, &media, 0, 0, &trim, &trimmed, None).expect("trimmed");
+    assert_eq!(info.sample_count, 14_400);
+
+    let full_data = wav_data(&full);
+    let trimmed_data = wav_data(&trimmed);
+    let offset = 400 * 48_000 / 1000 * 2 * 2;
+    assert_eq!(
+        &full_data[offset..offset + trimmed_data.len()],
+        trimmed_data.as_slice(),
+        "the trimmed window must be sample-identical to the full track"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn trim_beyond_the_track_yields_no_samples() {
+    let Some(toolchain) = toolchain() else {
+        return;
+    };
+    let dir = temp_dir("trim-empty");
+    let media = dir.join("step.mkv");
+    generate_step(&toolchain, &media);
+    let output = dir.join("empty.wav");
+    let trim = AudioTrim {
+        start_ms: Some(5_000),
+        ..AudioTrim::default()
+    };
+    let info = extract(&toolchain, &media, 0, 0, &trim, &output, None).expect("empty window");
+    assert_eq!(info.sample_count, 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn resample_changes_rate_and_channels() {
+    let Some(toolchain) = toolchain() else {
+        return;
+    };
+    let dir = temp_dir("resample");
+    let media = dir.join("step.mkv");
+    generate_step(&toolchain, &media);
+    let output = dir.join("mono16.wav");
+    let trim = AudioTrim {
+        sample_rate: Some(16_000),
+        channels: Some(1),
+        ..AudioTrim::default()
+    };
+    let info = extract(&toolchain, &media, 0, 0, &trim, &output, None).expect("resampled");
+    assert_eq!((info.sample_rate, info.channels), (16_000, 1));
+    assert_eq!(info.sample_count, 24_000);
     let _ = std::fs::remove_dir_all(&dir);
 }

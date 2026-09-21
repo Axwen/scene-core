@@ -20,6 +20,18 @@ pub const AUDIO_TIMEOUT: Duration = Duration::from_secs(600);
 pub const MAX_OUTPUT_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 /// `pcm_s16le` frames are two bytes per sample.
 pub const BYTES_PER_SAMPLE: u64 = 2;
+/// Decode margin before a trim start; the sample-accurate `atrim` filter does
+/// the actual cut, so this only has to cover container seek granularity.
+pub const SEEK_MARGIN_MS: u64 = 2_000;
+
+/// Requested trim window and output format. `None` keeps the source value.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct AudioTrim {
+    pub start_ms: Option<u64>,
+    pub end_ms: Option<u64>,
+    pub sample_rate: Option<u32>,
+    pub channels: Option<u16>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AudioError {
@@ -74,36 +86,64 @@ pub fn estimate_output_bytes(duration_ms: u64, sample_rate: u32, channels: u16) 
         / 1000
 }
 
-/// Extracts the whole audio stream at `audio_stream_index` into `output`.
+/// Extracts the selected audio stream (or the requested material window) into
+/// `output`. `origin_ms` is the container presentation origin: the filter cuts
+/// on source PTS, which is material time plus that origin.
 pub fn extract(
     toolchain: &Toolchain,
     input: &Path,
     audio_stream_index: u32,
+    origin_ms: i64,
+    trim: &AudioTrim,
     output: &Path,
     cancellation: Option<Arc<AtomicBool>>,
 ) -> Result<WavInfo, AudioError> {
-    let args: Vec<String> = [
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-nostdin",
-        "-i",
-        input.to_string_lossy().as_ref(),
-        "-map",
-        format!("0:{audio_stream_index}").as_str(),
-        "-vn",
-        "-sn",
-        "-dn",
-        "-c:a",
-        "pcm_s16le",
-        "-f",
-        "wav",
-        "-y",
-        output.to_string_lossy().as_ref(),
-    ]
-    .iter()
-    .map(|flag| (*flag).to_owned())
-    .collect();
+    let start_ms = trim.start_ms.unwrap_or(0);
+    let mut args: Vec<String> = vec![
+        "-hide_banner".to_owned(),
+        "-loglevel".to_owned(),
+        "error".to_owned(),
+        "-nostdin".to_owned(),
+    ];
+    if start_ms > SEEK_MARGIN_MS {
+        args.push("-ss".to_owned());
+        args.push(seconds(
+            i64::try_from(start_ms - SEEK_MARGIN_MS).unwrap_or(i64::MAX),
+        ));
+    }
+    // Keep the source timestamps so `atrim` can cut on material time.
+    args.push("-copyts".to_owned());
+    args.extend([
+        "-i".to_owned(),
+        input.to_string_lossy().into_owned(),
+        "-map".to_owned(),
+        format!("0:{audio_stream_index}"),
+    ]);
+    let material_offset = i64::try_from(start_ms).unwrap_or(i64::MAX);
+    let mut filter = format!(
+        "atrim=start={}",
+        seconds(material_offset.saturating_add(origin_ms))
+    );
+    if let Some(end_ms) = trim.end_ms {
+        let end = i64::try_from(end_ms)
+            .unwrap_or(i64::MAX)
+            .saturating_add(origin_ms);
+        filter.push_str(&format!(":end={}", seconds(end)));
+    }
+    filter.push_str(",asetpts=PTS-STARTPTS");
+    args.extend(["-af".to_owned(), filter]);
+    if let Some(rate) = trim.sample_rate {
+        args.extend(["-ar".to_owned(), rate.to_string()]);
+    }
+    if let Some(channels) = trim.channels {
+        args.extend(["-ac".to_owned(), channels.to_string()]);
+    }
+    args.extend(
+        ["-vn", "-sn", "-dn", "-c:a", "pcm_s16le", "-f", "wav", "-y"]
+            .iter()
+            .map(|flag| (*flag).to_owned()),
+    );
+    args.push(output.to_string_lossy().into_owned());
     let mut spec = ProcessSpec::new(toolchain.ffmpeg(), args).with_timeout(AUDIO_TIMEOUT);
     if let Some(flag) = cancellation {
         spec = spec.with_cancellation(flag);
@@ -182,6 +222,13 @@ pub fn wav_info(path: &Path) -> std::io::Result<WavInfo> {
         }
     }
     Err(invalid("the WAV has no data chunk"))
+}
+
+/// Signed seconds with millisecond precision for `-ss` and `atrim`.
+fn seconds(milliseconds: i64) -> String {
+    let sign = if milliseconds < 0 { "-" } else { "" };
+    let magnitude = milliseconds.unsigned_abs();
+    format!("{sign}{}.{:03}", magnitude / 1000, magnitude % 1000)
 }
 
 fn skip(file: &mut std::fs::File, bytes: u64) -> std::io::Result<()> {

@@ -23,6 +23,20 @@
 
 进程表现：probe 0.02 s / 38.8 MiB 峰值；extract_preview 0.13 s / 86.9 MiB 峰值；事件中无主机路径。
 
+## 2026-09-21 复测（当前引擎，含 `extract_audio_pcm`）
+
+用同一真实样本与新增的竖屏样本（均不入库）复跑：
+
+| 项 | 样本 A（1280x720，96.524 s） | 样本 B（1080x1920，53.406 s） |
+|---|---|---|
+| `probe` | container 96524/start 0；video 96500、audio 96524；AAC 44.1 kHz 立体声 | container 53406/start 0；video 53400、audio 53406；同参数 |
+| `extract_preview` | opening 512x288；midpoint `requestedTimeMs=48250` | opening/midpoint 288x512（不放大） |
+| `extract_audio_pcm` 整轨 | 4,256,704 样本（=96.524 s）、`presentationTimeMs=0` | 2,355,200 样本（=53.406 s）、`presentationTimeMs=0` |
+| 裁剪 `[10 s,20 s)` | 441000 样本；与整轨逐字节一致 | 440999 样本；对齐在 ±2 输入样本内 |
+| 裁剪 + 16 kHz 单声道 | 160000 样本 | 160000 样本 |
+
+注：midpoint 由 `floor(containerDurationMs/2)`（2026-09-16 记录的 48262）改为夹取到主视频轨时长（`min(container, video)/2 = 48250`），属 P1 审查修复后的预期行为。音频细节见 [audio-acceptance.md](audio-acceptance.md)。
+
 ## 覆盖与缺口
 
 - 已覆盖：真实 CFR 素材的容器/轨道归一化、音视频同步起点、MP4/H.264/AAC 常见路径、预览 profile 缩放与 midpoint 规则。

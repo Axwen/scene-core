@@ -144,6 +144,22 @@ pub fn probe_with_cancel(
     input: &Path,
     cancellation: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
 ) -> Result<NormalizedMedia, ProbeError> {
+    Ok(probe_with_origin(toolchain, input, cancellation)?.media)
+}
+
+/// Probe result that keeps the raw container presentation origin so
+/// operations can cut on source PTS without exposing raw ticks in the DTO.
+pub struct ProbeOutput {
+    pub media: NormalizedMedia,
+    pub origin: Option<ExactTime>,
+}
+
+/// Same as [`probe_with_cancel`], but returns the raw presentation origin.
+pub fn probe_with_origin(
+    toolchain: &Toolchain,
+    input: &Path,
+    cancellation: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+) -> Result<ProbeOutput, ProbeError> {
     if !input.is_file() {
         return Err(ProbeError::UnsupportedInput);
     }
@@ -208,7 +224,7 @@ fn classify_failure(stdout: &str, stderr: &str) -> ProbeError {
     }
 }
 
-fn normalize(parsed: &FfprobeOutput, input: &Path) -> Result<NormalizedMedia, ProbeError> {
+fn normalize(parsed: &FfprobeOutput, input: &Path) -> Result<ProbeOutput, ProbeError> {
     let format = parsed.format.as_ref();
     let format_name = format
         .and_then(|format| format.format_name.clone())
@@ -352,7 +368,7 @@ fn normalize(parsed: &FfprobeOutput, input: &Path) -> Result<NormalizedMedia, Pr
     media
         .validate()
         .map_err(|_| ProbeError::EngineInternal("normalized media failed validation"))?;
-    Ok(media)
+    Ok(ProbeOutput { media, origin })
 }
 
 fn stream_kind(stream: &StreamInfo) -> Option<StreamKind> {
@@ -466,6 +482,7 @@ mod tests {
 
     fn normalize_json(value: &str) -> Result<NormalizedMedia, ProbeError> {
         normalize(&probe_json(value), Path::new("/nonexistent/fixture.media"))
+            .map(|output| output.media)
     }
 
     const HEADER: &str = r#""format_name": "matroska,webm", "duration": "60.000000", "start_time": "10.000000", "bit_rate": "1000000", "size": "1048576""#;

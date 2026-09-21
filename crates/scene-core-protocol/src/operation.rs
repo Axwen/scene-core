@@ -68,6 +68,50 @@ pub struct AudioPcmOptions {
     /// audio stream.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audio_stream_index: Option<u32>,
+    /// Material start of the requested half-open window; defaults to 0.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_ms: Option<u64>,
+    /// Material end of the requested window; defaults to the track end.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_ms: Option<u64>,
+    /// Output sample rate; omitted keeps the source rate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sample_rate: Option<u32>,
+    /// Output channel count (1 or 2); omitted keeps the source layout.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channels: Option<u16>,
+}
+
+/// Bounds accepted by `extract_audio_pcm` options.
+pub const MIN_AUDIO_SAMPLE_RATE: u32 = 8_000;
+pub const MAX_AUDIO_SAMPLE_RATE: u32 = 192_000;
+pub const MAX_AUDIO_CHANNELS: u16 = 2;
+
+impl AudioPcmOptions {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if let (Some(start), Some(end)) = (self.start_ms, self.end_ms) {
+            if end <= start {
+                return Err(ValidationError::new(
+                    "options.endMs",
+                    "must be greater than startMs",
+                ));
+            }
+        }
+        if let Some(rate) = self.sample_rate {
+            if !(MIN_AUDIO_SAMPLE_RATE..=MAX_AUDIO_SAMPLE_RATE).contains(&rate) {
+                return Err(ValidationError::new(
+                    "options.sampleRate",
+                    "must be between 8000 and 192000",
+                ));
+            }
+        }
+        if let Some(channels) = self.channels {
+            if channels == 0 || channels > MAX_AUDIO_CHANNELS {
+                return Err(ValidationError::new("options.channels", "must be 1 or 2"));
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Operation-specific options. The wire shape must match the request
@@ -107,7 +151,19 @@ impl<'de> Deserialize<'de> for OperationOptions {
             where
                 A: serde::de::MapAccess<'de>,
             {
+                const FIELDS: [&str; 5] = [
+                    "audioStreamIndex",
+                    "startMs",
+                    "endMs",
+                    "sampleRate",
+                    "channels",
+                ];
                 let mut audio_stream_index: Option<u32> = None;
+                let mut start_ms: Option<u64> = None;
+                let mut end_ms: Option<u64> = None;
+                let mut sample_rate: Option<u32> = None;
+                let mut channels: Option<u16> = None;
+                let mut present = false;
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
                         "audioStreamIndex" => {
@@ -118,20 +174,56 @@ impl<'de> Deserialize<'de> for OperationOptions {
                             }
                             audio_stream_index = Some(map.next_value()?);
                         }
+                        "startMs" => {
+                            if start_ms.is_some() {
+                                return Err(<A::Error as serde::de::Error>::duplicate_field(
+                                    "startMs",
+                                ));
+                            }
+                            start_ms = Some(map.next_value()?);
+                        }
+                        "endMs" => {
+                            if end_ms.is_some() {
+                                return Err(<A::Error as serde::de::Error>::duplicate_field(
+                                    "endMs",
+                                ));
+                            }
+                            end_ms = Some(map.next_value()?);
+                        }
+                        "sampleRate" => {
+                            if sample_rate.is_some() {
+                                return Err(<A::Error as serde::de::Error>::duplicate_field(
+                                    "sampleRate",
+                                ));
+                            }
+                            sample_rate = Some(map.next_value()?);
+                        }
+                        "channels" => {
+                            if channels.is_some() {
+                                return Err(<A::Error as serde::de::Error>::duplicate_field(
+                                    "channels",
+                                ));
+                            }
+                            channels = Some(map.next_value()?);
+                        }
                         other => {
                             return Err(<A::Error as serde::de::Error>::unknown_field(
-                                other,
-                                &["audioStreamIndex"],
+                                other, &FIELDS,
                             ));
                         }
                     }
+                    present = true;
                 }
-                Ok(match audio_stream_index {
-                    Some(index) => OperationOptions::ExtractAudioPcm(AudioPcmOptions {
-                        audio_stream_index: Some(index),
-                    }),
-                    None => OperationOptions::Empty(EmptyOptions {}),
-                })
+                if !present {
+                    return Ok(OperationOptions::Empty(EmptyOptions {}));
+                }
+                Ok(OperationOptions::ExtractAudioPcm(AudioPcmOptions {
+                    audio_stream_index,
+                    start_ms,
+                    end_ms,
+                    sample_rate,
+                    channels,
+                }))
             }
         }
 
@@ -144,7 +236,9 @@ impl OperationOptions {
     pub fn validate_for(&self, operation: Operation) -> Result<(), ValidationError> {
         match (operation, self) {
             (_, OperationOptions::Empty(_)) => Ok(()),
-            (Operation::ExtractAudioPcm, OperationOptions::ExtractAudioPcm(_)) => Ok(()),
+            (Operation::ExtractAudioPcm, OperationOptions::ExtractAudioPcm(options)) => {
+                options.validate()
+            }
             (other, _) => Err(ValidationError::new(
                 "options",
                 format!("are not registered for operation '{}'", other.as_str()),
@@ -156,6 +250,14 @@ impl OperationOptions {
     pub const fn audio_stream_index(&self) -> Option<u32> {
         match self {
             OperationOptions::ExtractAudioPcm(options) => options.audio_stream_index,
+            OperationOptions::Empty(_) => None,
+        }
+    }
+
+    /// The audio options variant, if present.
+    pub const fn audio_pcm(&self) -> Option<&AudioPcmOptions> {
+        match self {
+            OperationOptions::ExtractAudioPcm(options) => Some(options),
             OperationOptions::Empty(_) => None,
         }
     }
@@ -204,7 +306,49 @@ mod tests {
                 .expect("audio options"),
             OperationOptions::ExtractAudioPcm(AudioPcmOptions {
                 audio_stream_index: Some(2),
+                ..AudioPcmOptions::default()
             })
+        );
+        assert_eq!(
+            serde_json::from_str::<OperationOptions>(
+                r#"{"startMs":400,"endMs":700,"sampleRate":16000,"channels":1}"#
+            )
+            .expect("trim options"),
+            OperationOptions::ExtractAudioPcm(AudioPcmOptions {
+                audio_stream_index: None,
+                start_ms: Some(400),
+                end_ms: Some(700),
+                sample_rate: Some(16_000),
+                channels: Some(1),
+            })
+        );
+        let invalid_trim = OperationOptions::ExtractAudioPcm(AudioPcmOptions {
+            start_ms: Some(700),
+            end_ms: Some(700),
+            ..AudioPcmOptions::default()
+        });
+        assert!(
+            invalid_trim
+                .validate_for(Operation::ExtractAudioPcm)
+                .is_err()
+        );
+        let invalid_rate = OperationOptions::ExtractAudioPcm(AudioPcmOptions {
+            sample_rate: Some(4_000),
+            ..AudioPcmOptions::default()
+        });
+        assert!(
+            invalid_rate
+                .validate_for(Operation::ExtractAudioPcm)
+                .is_err()
+        );
+        let invalid_channels = OperationOptions::ExtractAudioPcm(AudioPcmOptions {
+            channels: Some(6),
+            ..AudioPcmOptions::default()
+        });
+        assert!(
+            invalid_channels
+                .validate_for(Operation::ExtractAudioPcm)
+                .is_err()
         );
         assert!(
             serde_json::from_str::<OperationOptions>(r#"{"audioStreamIndex":"2"}"#).is_err(),
@@ -225,6 +369,7 @@ mod tests {
 
         let audio = OperationOptions::ExtractAudioPcm(AudioPcmOptions {
             audio_stream_index: Some(1),
+            ..AudioPcmOptions::default()
         });
         assert!(audio.validate_for(Operation::ExtractAudioPcm).is_ok());
         assert!(audio.validate_for(Operation::Probe).is_err());

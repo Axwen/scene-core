@@ -985,6 +985,66 @@
         "errorCode": null,
         "exitCode": 0
       }
+    },
+    {
+      "file": "valid/control-start-extract-audio-pcm-trimmed.json",
+      "kind": "valid",
+      "entrypoint": "control",
+      "rule": "extract_audio_pcm with a trim window and resampling options",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "valid/artifact-manifest-audio-pcm-trimmed.json",
+      "kind": "valid",
+      "entrypoint": "manifest",
+      "rule": "trimmed audio Manifest keeps requestedTimeMs and the actual start",
+      "schema": "artifact-manifest.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-options-audio-invalid-trim.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "endMs must be greater than startMs",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-options-audio-rate-out-of-range.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "sampleRate must stay within the registered range",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/manifest-audio-empty-window.json",
+      "kind": "invalid",
+      "entrypoint": "manifest",
+      "rule": "audio artifacts must not carry zero samples",
+      "schema": "artifact-manifest.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
     }
   ]
 }

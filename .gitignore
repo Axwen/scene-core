@@ -1,4 +1,6 @@
 /target/
+# Local real-media samples for manual validation; never committed.
+/test/
 
 /packaging/bundles/windows-x86_64/bundle/
 /packaging/bundles/windows-x86_64/*.zip

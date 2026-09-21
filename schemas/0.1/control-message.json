@@ -12,6 +12,43 @@
             "integer",
             "null"
           ]
+        },
+        "channels": {
+          "description": "Output channel count (1 or 2); omitted keeps the source layout.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "endMs": {
+          "description": "Material end of the requested window; defaults to the track end.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "sampleRate": {
+          "description": "Output sample rate; omitted keeps the source rate.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "startMs": {
+          "description": "Material start of the requested half-open window; defaults to 0.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         }
       },
       "type": "object"
