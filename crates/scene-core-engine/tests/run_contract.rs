@@ -1235,11 +1235,41 @@ fn audio_extraction_reports_a_positive_stream_start() {
     assert_eq!(exit_code, 0);
     let artifact = audio_artifact_of(&events);
     assert_eq!(artifact.presentation_time_ms, Some(80));
-    assert_eq!(
-        artifact.audio_pcm.expect("audio mapping").sample_count,
-        48_000
+    let mapping = artifact.audio_pcm.expect("audio mapping");
+    assert_eq!(mapping.sample_count, 48_000);
+    // The tone starts with the stream. Output samples start at the first
+    // available sample, so the mapping material = start + n / rate must put
+    // the first loud frame at the stream's material start (80ms).
+    let onset = first_loud_frame(&staging.join("output/audio/track.wav"), mapping.channels);
+    let onset_ms = onset * 1000 / u64::from(mapping.sample_rate);
+    let material_onset_ms = artifact.presentation_time_ms.expect("start") + onset_ms;
+    assert!(
+        material_onset_ms.abs_diff(80) <= 1,
+        "tone onset mapped to {material_onset_ms}ms instead of 80ms"
     );
     let _ = std::fs::remove_dir_all(&staging);
+}
+
+fn first_loud_frame(path: &Path, channels: u32) -> u64 {
+    let bytes = std::fs::read(path).expect("read wav");
+    let data_start = bytes
+        .windows(4)
+        .position(|window| window == b"data")
+        .expect("data chunk")
+        + 8;
+    let frame_bytes = channels as usize * 2;
+    let mut frame = 0;
+    while data_start + (frame + 1) * frame_bytes <= bytes.len() {
+        for channel in 0..channels as usize {
+            let offset = data_start + frame * frame_bytes + channel * 2;
+            let value = i16::from_le_bytes([bytes[offset], bytes[offset + 1]]);
+            if value.abs() > 2_000 {
+                return frame as u64;
+            }
+        }
+        frame += 1;
+    }
+    panic!("no loud frame found");
 }
 
 #[test]
@@ -1293,5 +1323,63 @@ fn missing_audio_stream_fails_with_its_code() {
     assert_eq!(error.stage.as_deref(), Some("audio"));
     assert!(!error.retryable);
     assert!(!staging.join("output/audio/track.wav").exists());
+    let _ = std::fs::remove_dir_all(&staging);
+}
+
+#[test]
+fn audio_deadline_reaps_the_tool_and_exits_124() {
+    let Ok(bin_dir) = std::env::var(scene_core_media::toolchain::ENV_FFMPEG_DIR) else {
+        eprintln!("skipping: SCENE_CORE_FFMPEG_DIR is not set");
+        return;
+    };
+    let staging =
+        std::env::temp_dir().join(format!("scene-core-audio-timeout-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&staging);
+    stage_audio_track(&bin_dir, &staging);
+    let request = audio_request(&staging, None, 1);
+    let (exit_code, events) = run_audio_session(&bin_dir, &staging, &request);
+    assert_eq!(exit_code, 124);
+    assert_eq!(
+        events.last().expect("terminal").event_type,
+        EventType::TimedOut
+    );
+    assert!(!staging.join("output/audio/track.wav").exists());
+    let _ = std::fs::remove_dir_all(&staging);
+}
+
+#[cfg(unix)]
+#[test]
+fn unwritable_audio_output_reports_resource_limit() {
+    let Ok(bin_dir) = std::env::var(scene_core_media::toolchain::ENV_FFMPEG_DIR) else {
+        eprintln!("skipping: SCENE_CORE_FFMPEG_DIR is not set");
+        return;
+    };
+    let staging =
+        std::env::temp_dir().join(format!("scene-core-audio-disk-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&staging);
+    stage_audio_track(&bin_dir, &staging);
+    let audio_dir = staging.join("output/audio");
+    std::fs::create_dir_all(&audio_dir).expect("audio dir");
+    let mut permissions = std::fs::metadata(&audio_dir)
+        .expect("metadata")
+        .permissions();
+    std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o555);
+    std::fs::set_permissions(&audio_dir, permissions).expect("read-only");
+
+    let request = audio_request(&staging, None, 60_000);
+    let (exit_code, events) = run_audio_session(&bin_dir, &staging, &request);
+    assert_eq!(exit_code, 3);
+    let error = events
+        .last()
+        .and_then(|event| event.error.as_ref())
+        .expect("controlled error");
+    assert_eq!(error.code, ErrorCode::ResourceLimit);
+    assert!(!staging.join("output/audio/track.wav").exists());
+
+    let mut permissions = std::fs::metadata(&audio_dir)
+        .expect("metadata")
+        .permissions();
+    std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o755);
+    std::fs::set_permissions(&audio_dir, permissions).expect("restore");
     let _ = std::fs::remove_dir_all(&staging);
 }
