@@ -59,7 +59,7 @@ fn request(operation: Operation) -> StartRequest {
             scope: ExecutionScope::Asset,
         },
         deadline_ms: None,
-        options: scene_core_protocol::OperationOptions {},
+        options: scene_core_protocol::OperationOptions::default(),
     }
 }
 
@@ -107,8 +107,30 @@ fn fake_artifact() -> Artifact {
         content_hash: digest(3),
         requested_time_ms: 0,
         presentation_time_ms: None,
+        audio_pcm: None,
         pixel_width: Some(64),
         pixel_height: Some(48),
+    }
+}
+
+fn fake_audio_artifact() -> Artifact {
+    Artifact {
+        artifact_id: Identifier::new("audio-pcm").expect("id"),
+        kind: ArtifactKind::AudioPcm,
+        role: ArtifactRole::Audio,
+        media_type: MediaType::new("audio/wav").expect("media type"),
+        relative_ref: RelativeRef::new("output/audio/track.wav").expect("ref"),
+        byte_size: 96_044,
+        content_hash: digest(4),
+        requested_time_ms: 0,
+        presentation_time_ms: Some(0),
+        audio_pcm: Some(scene_core_protocol::AudioPcmInfo {
+            sample_rate: 48_000,
+            channels: 2,
+            sample_count: 48_000,
+        }),
+        pixel_width: None,
+        pixel_height: None,
     }
 }
 
@@ -131,6 +153,29 @@ impl MediaBackend for FakeBackend {
             Mode::Success | Mode::Violation => Ok(PreviewOutcome {
                 media: minimal_media(),
                 artifacts: vec![fake_artifact()],
+            }),
+        }
+    }
+
+    fn extract_audio_pcm(
+        &self,
+        _staging: &StagingRoot,
+        control: &RunControl,
+        _audio_stream_index: Option<u32>,
+    ) -> Result<scene_core_engine::run::AudioPcmOutcome, MediaFailure> {
+        match self.mode {
+            Mode::Cancel => {
+                control.request_cancel();
+                Err(MediaFailure::Cancelled)
+            }
+            Mode::Timeout => {
+                control.request_timeout();
+                Err(MediaFailure::Timeout)
+            }
+            Mode::ToolUnavailable => Err(MediaFailure::ToolUnavailable),
+            Mode::Success | Mode::Violation => Ok(scene_core_engine::run::AudioPcmOutcome {
+                media: minimal_media(),
+                artifacts: vec![fake_audio_artifact()],
             }),
         }
     }
@@ -565,7 +610,7 @@ fn probe_run_succeeds_against_staged_media() {
             scope: ExecutionScope::Asset,
         },
         deadline_ms: Some(60_000),
-        options: scene_core_protocol::OperationOptions {},
+        options: scene_core_protocol::OperationOptions::default(),
     };
 
     let line = serde_json::to_string(&request).expect("serialize");
@@ -714,7 +759,7 @@ fn live_request(operation: Operation, staging: &Path, deadline_ms: u64) -> Start
             scope: ExecutionScope::Asset,
         },
         deadline_ms: Some(deadline_ms),
-        options: scene_core_protocol::OperationOptions {},
+        options: scene_core_protocol::OperationOptions::default(),
     }
 }
 
@@ -991,5 +1036,262 @@ fn missing_fingerprint_still_reports_accepted_then_failed() {
     let error = terminal.error.as_ref().expect("error");
     assert_eq!(error.code, ErrorCode::ToolUnavailable);
     assert_eq!(error.stage.as_deref(), Some("probe"));
+    let _ = std::fs::remove_dir_all(&staging);
+}
+
+fn stage_media_with_ffmpeg(bin_dir: &str, staging: &Path, args: &[&str]) {
+    use scene_core_media::toolchain::Toolchain;
+    let toolchain = Toolchain::from_bin_dir(bin_dir).expect("toolchain");
+    std::fs::create_dir_all(staging.join("input")).expect("input dir");
+    let media = staging.join("input/source.media");
+    let args: Vec<String> = args
+        .iter()
+        .map(|flag| (*flag).to_owned())
+        .chain(["-y".to_owned(), media.to_string_lossy().into_owned()])
+        .collect();
+    let result = scene_core_media::process::run(&scene_core_media::process::ProcessSpec::new(
+        toolchain.ffmpeg(),
+        args,
+    ))
+    .expect("spawn");
+    assert!(result.success, "media generation failed");
+}
+
+fn stage_audio_track(bin_dir: &str, staging: &Path) {
+    stage_media_with_ffmpeg(
+        bin_dir,
+        staging,
+        &[
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=1:sample_rate=48000",
+            "-ac",
+            "2",
+            "-c:a",
+            "pcm_s16le",
+            "-f",
+            "matroska",
+        ],
+    );
+}
+
+fn stage_two_audio_tracks(bin_dir: &str, staging: &Path) {
+    stage_media_with_ffmpeg(
+        bin_dir,
+        staging,
+        &[
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=1:sample_rate=48000",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=880:duration=1:sample_rate=8000",
+            "-map",
+            "0:a",
+            "-map",
+            "1:a",
+            "-c:a",
+            "pcm_s16le",
+            "-f",
+            "matroska",
+        ],
+    );
+}
+
+fn stage_delayed_audio(bin_dir: &str, staging: &Path) {
+    stage_media_with_ffmpeg(
+        bin_dir,
+        staging,
+        &[
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=duration=1:size=64x48:rate=10",
+            "-itsoffset",
+            "0.08",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=1:sample_rate=48000",
+            "-map",
+            "0:v",
+            "-map",
+            "1:a",
+            "-c:v",
+            "mjpeg",
+            "-c:a",
+            "pcm_s16le",
+            "-f",
+            "matroska",
+        ],
+    );
+}
+
+fn audio_request(
+    staging: &Path,
+    audio_stream_index: Option<u32>,
+    deadline_ms: u64,
+) -> StartRequest {
+    let mut request = live_request(Operation::ExtractAudioPcm, staging, deadline_ms);
+    request.options = match audio_stream_index {
+        Some(index) => scene_core_protocol::OperationOptions::ExtractAudioPcm(
+            scene_core_protocol::AudioPcmOptions {
+                audio_stream_index: Some(index),
+            },
+        ),
+        None => scene_core_protocol::OperationOptions::default(),
+    };
+    request.operation_config_hash = scene_core_protocol::canonical_sha256(
+        &serde_json::to_value(request.options).expect("options"),
+    )
+    .expect("config hash");
+    request.derivation_key = DerivationDescriptor {
+        derivation_descriptor_version: DescriptorVersion::current(),
+        input_fingerprint: request.input_fingerprint.clone(),
+        operation: Operation::ExtractAudioPcm,
+        operation_config_hash: request.operation_config_hash.clone(),
+        output_contract_version: request.output_contract_version.clone(),
+        engine_cache_compatibility_id: CacheCompatibilityId::new("scene-core-output-v1")
+            .expect("cache id"),
+        toolchain_fingerprint: digest(2),
+    }
+    .derive_key()
+    .expect("key");
+    request
+}
+
+fn run_audio_session(
+    bin_dir: &str,
+    staging: &Path,
+    request: &StartRequest,
+) -> (i32, Vec<EventEnvelope>) {
+    let fingerprint = digest(2).as_str().to_owned();
+    let (exit_code, stdout, stderr) = run_binary(
+        &["run", "--staging-root", staging.to_str().expect("utf-8")],
+        Some(&serde_json::to_string(request).expect("serialize")),
+        &[
+            ("SCENE_CORE_FFMPEG_DIR", bin_dir),
+            ("SCENE_CORE_TOOLCHAIN_FINGERPRINT", &fingerprint),
+        ],
+    );
+    let events: Vec<EventEnvelope> = stdout
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("event JSON"))
+        .collect();
+    assert!(!events.is_empty(), "stderr: {stderr}");
+    (exit_code, events)
+}
+
+fn audio_artifact_of(events: &[EventEnvelope]) -> &Artifact {
+    let Some(OperationResult::ExtractAudioPcm(result)) =
+        events.last().and_then(|event| event.result.as_ref())
+    else {
+        panic!("expected an audio result");
+    };
+    &result.artifact_manifest.artifacts[0]
+}
+
+#[test]
+fn audio_extraction_reports_the_track_mapping() {
+    let Ok(bin_dir) = std::env::var(scene_core_media::toolchain::ENV_FFMPEG_DIR) else {
+        eprintln!("skipping: SCENE_CORE_FFMPEG_DIR is not set");
+        return;
+    };
+    let staging = std::env::temp_dir().join(format!("scene-core-audio-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&staging);
+    stage_audio_track(&bin_dir, &staging);
+    let request = audio_request(&staging, None, 60_000);
+    let (exit_code, events) = run_audio_session(&bin_dir, &staging, &request);
+    assert_eq!(exit_code, 0);
+    assert_eq!(
+        events.last().expect("terminal").event_type,
+        EventType::Completed
+    );
+    let artifact = audio_artifact_of(&events);
+    let audio = artifact.audio_pcm.expect("audio mapping");
+    assert_eq!(audio.sample_rate, 48_000);
+    assert_eq!(audio.channels, 2);
+    assert_eq!(audio.sample_count, 48_000);
+    assert_eq!(artifact.presentation_time_ms, Some(0));
+    assert!(staging.join("output/audio/track.wav").is_file());
+    let _ = std::fs::remove_dir_all(&staging);
+}
+
+#[test]
+fn audio_extraction_reports_a_positive_stream_start() {
+    let Ok(bin_dir) = std::env::var(scene_core_media::toolchain::ENV_FFMPEG_DIR) else {
+        eprintln!("skipping: SCENE_CORE_FFMPEG_DIR is not set");
+        return;
+    };
+    let staging =
+        std::env::temp_dir().join(format!("scene-core-audio-delay-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&staging);
+    stage_delayed_audio(&bin_dir, &staging);
+    let request = audio_request(&staging, None, 60_000);
+    let (exit_code, events) = run_audio_session(&bin_dir, &staging, &request);
+    assert_eq!(exit_code, 0);
+    let artifact = audio_artifact_of(&events);
+    assert_eq!(artifact.presentation_time_ms, Some(80));
+    assert_eq!(
+        artifact.audio_pcm.expect("audio mapping").sample_count,
+        48_000
+    );
+    let _ = std::fs::remove_dir_all(&staging);
+}
+
+#[test]
+fn audio_stream_selection_is_explicit() {
+    let Ok(bin_dir) = std::env::var(scene_core_media::toolchain::ENV_FFMPEG_DIR) else {
+        eprintln!("skipping: SCENE_CORE_FFMPEG_DIR is not set");
+        return;
+    };
+    let staging =
+        std::env::temp_dir().join(format!("scene-core-audio-multi-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&staging);
+    stage_two_audio_tracks(&bin_dir, &staging);
+
+    let default_request = audio_request(&staging, None, 60_000);
+    let (exit_code, events) = run_audio_session(&bin_dir, &staging, &default_request);
+    assert_eq!(exit_code, 0);
+    let default_audio = audio_artifact_of(&events).audio_pcm.expect("audio mapping");
+    assert_eq!(
+        (default_audio.sample_rate, default_audio.channels),
+        (48_000, 1)
+    );
+
+    let selected = audio_request(&staging, Some(1), 60_000);
+    let (exit_code, events) = run_audio_session(&bin_dir, &staging, &selected);
+    assert_eq!(exit_code, 0);
+    let selected_audio = audio_artifact_of(&events).audio_pcm.expect("audio mapping");
+    assert_eq!(
+        (selected_audio.sample_rate, selected_audio.channels),
+        (8_000, 1)
+    );
+    let _ = std::fs::remove_dir_all(&staging);
+}
+
+#[test]
+fn missing_audio_stream_fails_with_its_code() {
+    let Ok(bin_dir) = std::env::var(scene_core_media::toolchain::ENV_FFMPEG_DIR) else {
+        eprintln!("skipping: SCENE_CORE_FFMPEG_DIR is not set");
+        return;
+    };
+    let staging =
+        std::env::temp_dir().join(format!("scene-core-audio-none-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&staging);
+    stage_media(&bin_dir, &staging);
+    let request = audio_request(&staging, None, 60_000);
+    let (exit_code, events) = run_audio_session(&bin_dir, &staging, &request);
+    assert_eq!(exit_code, 3);
+    let terminal = events.last().expect("terminal");
+    assert_eq!(terminal.event_type, EventType::Failed);
+    let error = terminal.error.as_ref().expect("error");
+    assert_eq!(error.code, ErrorCode::MissingAudioStream);
+    assert_eq!(error.stage.as_deref(), Some("audio"));
+    assert!(!error.retryable);
+    assert!(!staging.join("output/audio/track.wav").exists());
     let _ = std::fs::remove_dir_all(&staging);
 }
