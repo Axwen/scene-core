@@ -66,7 +66,7 @@
 
 ### 第二轮 Eng Review（2026-09-21）
 
-范围：T1–T5 工作树改动（doctor/staging 链接边界、失败 stage、许可证引用闭合、文档状态、Windows staging 测试与 CI step）。结论：**CLEAN**（实现、契约与本地门禁）；唯一未闭合项是 Windows 运行时 CI 执行，属环境门禁而非设计结论。
+范围：T1–T5 工作树改动（doctor/staging 链接边界、失败 stage、许可证引用闭合、文档状态、Windows staging 测试与 CI step）。结论：**CLEAN**（实现、契约、本地门禁与 Windows CI）；Windows staging/junction/symlink 与 reparse 用例已由 PR #28 的 Windows checks 实测通过，无静默跳过。
 
 | 项 | 证据 | 判定 |
 |---|---|---|
@@ -74,7 +74,7 @@
 | T2 失败 stage 按 operation | preview 工具失败 stage=`preview`、probe=`probe`；timeout/cancel 仍为 `run`（`run.rs:593`、`run.rs:598`）；`run_contract` 断言通过 | CLEAN |
 | T3 许可证引用闭合 | `package.rs` 要求 `thirdPartyLicensesRef/` 下至少一个已列文件，相似前缀目录被拒；`build-windows-bundle.ps1` 生成 `THIRD_PARTY_LICENSES/COPYING.LGPLv3` 并计入 `files`，真实 bundle 不受影响 | CLEAN |
 | T4 文档状态同步与链接 | P0 Epic、实现计划与验收记录措辞一致，无“Phase 1 未创建”“媒体运行时未实现”残留；`docs/**` 57 条相对链接全部可解析（本轮修复 5 处越级路径） | CLEAN |
-| T5 Windows staging 边界 | Linux staging 6/6 通过（ADS/UNC/traversal 词法拒绝 + Unix symlink）；Windows junction/symlink 用例交叉编译通过；CI 新增 `cargo +1.85.1 test -p scene-core-media staging --locked` | CLEAN（运行时待 CI） |
+| T5 Windows staging 边界 | Linux staging 6/6 通过（ADS/UNC/traversal 词法拒绝 + Unix symlink）；Windows 运行时 junction/symlink/unsafe-ref 用例在 PR #28 的 Windows checks 中通过；CI step `cargo +1.85.1 test -p scene-core-media staging --locked` | CLEAN |
 
 本地门禁：`cargo fmt --all -- --check`、`cargo check --workspace --locked`、`cargo test --workspace --locked`、`cargo clippy --workspace --all-targets --locked -- -D warnings`、`bash scripts/check-schema-drift.sh`、`git diff --check` 全部通过；另执行 `cargo check -p scene-core-media -p scene-core-engine --tests --target x86_64-pc-windows-msvc --locked` 覆盖 `#[cfg(windows)]` 测试代码。
 
@@ -88,7 +88,7 @@
 
 1. ~~真实/公开脱敏样本、预览期望图与播放器点击对照~~ 已完成，见 [manual-verification.md](../acceptance/manual-verification.md) 与 [real-media-acceptance.md](../acceptance/real-media-acceptance.md)。
 2. 并发/多请求下的峰值内存与磁盘配额：单请求与 20 GiB 已实测（567 MiB/s、峰值 152 MiB）；Host 侧准入、配额与 single-flight 契约已定义（[host-cache-contract](../specs/host-cache-contract.md) §6.1），Host 实现与实测待 P2。
-3. 聚焦 Eng Review：第一轮审查发现已修复并留证；第二轮复核（2026-09-21）结论 CLEAN，见上节与 [media-extension-review.md](../architecture/repositories/scene-core/media-extension-review.md) 报告；Windows 运行时条件测试待 CI 首次推送执行。
+3. 聚焦 Eng Review：第一轮审查发现已修复并留证；第二轮复核（2026-09-21）结论 CLEAN，见上节与 [media-extension-review.md](../architecture/repositories/scene-core/media-extension-review.md) 报告；Windows 运行时条件测试已在 PR #28 的 Windows checks 中通过（`listed_reparse_file_fails_bundle_files`、junction/symlink 用例均 ok）。
 4. ~~Windows sidecar 内的 `run` 端到端实测~~ 已在干净 Windows 上以 bundle artifact 跑通 probe/extract_preview 与负向矩阵。
 
 ## 完成定义

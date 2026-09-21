@@ -113,7 +113,7 @@ T3/T4 是已确认后置方向，尚非可直接编码的规格。工作量需�
 | Review | Runs | Status | Findings |
 |---|---:|---|---|
 | Eng 增量审查（第 1 轮，2026-09-14） | 1 | DONE_WITH_CONCERNS | 分阶段、职责和精确时间规则均已确认；代码及媒体验证未完成 |
-| Eng 增量审查（第 2 轮，2026-09-21） | 2 | CLEAN | 第 1 轮遗留的代码与媒体验证已由 P1 结项、真实媒体/Windows 手动验收和本轮复核关闭；Windows 运行时 CI 待首次推送，详见 [SC-P1-EPIC](../../../tickets/SC-P1-EPIC.md) |
+| Eng 增量审查（第 2 轮，2026-09-21） | 2 | CLEAN | 第 1 轮遗留的代码与媒体验证已由 P1 结项、真实媒体/Windows 手动验收和本轮复核关闭；Windows 运行时条件测试已由 PR #28 的 Windows checks 验证，详见 [SC-P1-EPIC](../../../tickets/SC-P1-EPIC.md) |
 | 独立模型复核 | 0 | NOT RUN | 无双模型共识结论 |
 
 **VERDICT:** 规划决策已关闭；P1 实现与媒体验收已闭合，第二轮 Eng Review 从 `DONE_WITH_CONCERNS` 转为 `CLEAN`；音频/抽帧仍按 T3/T4 后置。
