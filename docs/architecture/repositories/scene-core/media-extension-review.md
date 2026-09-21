@@ -113,9 +113,10 @@ T3/T4 是已确认后置方向，尚非可直接编码的规格。工作量需�
 | Review | Runs | Status | Findings |
 |---|---:|---|---|
 | Eng 增量审查（第 1 轮，2026-09-14） | 1 | DONE_WITH_CONCERNS | 分阶段、职责和精确时间规则均已确认；代码及媒体验证未完成 |
-| Eng 增量审查（第 2 轮，2026-09-21） | 2 | CLEAN | 第 1 轮遗留的代码与媒体验证已由 P1 结项、真实媒体/Windows 手动验收和本轮复核关闭；Windows 运行时条件测试已由 PR #28 的 Windows checks 验证，详见 [SC-P1-EPIC](../../../tickets/SC-P1-EPIC.md) |
-| 独立模型复核 | 0 | NOT RUN | 无双模型共识结论 |
+| Eng 增量审查（第 2 轮，2026-09-21） | 2 | DONE_WITH_CONCERNS | 第 1 轮遗留的媒体验证已闭合（真实媒体/Windows 手动验收/PR #28 运行时用例）；全量实现复核新发现 3×P1、16×P2，详见 [p1-eng-review.md](p1-eng-review.md) |
+| 修复复核（2026-09-21） | 3 | CLEAN | 3×P1、16×P2 全部修复并补回归（`sc-p1-eng-review-fixes`）；无未决项 |
+| 独立模型复核 | 0 | NOT RUN | 环境降级，未运行第二模型 |
 
-**VERDICT:** 规划决策已关闭；P1 实现与媒体验收已闭合，第二轮 Eng Review 从 `DONE_WITH_CONCERNS` 转为 `CLEAN`；音频/抽帧仍按 T3/T4 后置。
+**VERDICT:** 规划决策已关闭；媒体验收已闭合，第二轮 Eng Review 发现已全部修复并复核 CLEAN（P1：preview midpoint 越界、缺指纹不产出协议事件、Manifest 身份未回传）。音频/抽帧仍按 T3/T4 后置。
 
 NO UNRESOLVED DECISIONS
