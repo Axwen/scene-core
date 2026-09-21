@@ -50,6 +50,7 @@
 - 阈值（可用环境变量覆盖）：哈希吞吐下限 `SCENE_CORE_PERF_MIN_HASH_MIBPS`=50、probe p95 上限 `SCENE_CORE_PERF_MAX_PROBE_P95_MS`=1500、preview p95 上限 `SCENE_CORE_PERF_MAX_PREVIEW_P95_MS`=3000、抖动比 `SCENE_CORE_PERF_MAX_JITTER_RATIO`=5（判据 `p95 ≤ p50 × ratio + 50 ms`）。
 - 阈值只是共享 runner 上的回归冒烟保护，**不是**发布 SLA；发布数字仍以 `media_baselines` 在专用机器上的测量为准。Linux CI 在锁定工具链步骤后新增 `Run media performance smoke gate` 步骤。
 - 本地实测（2026-09-21，WSL2 x86_64，锁定工具链）：probe p50 10.4 / p95 10.5 ms、preview p50 20.5 / p95 26.2 ms、64 MiB 哈希 3525 MiB/s，均在阈值内。
+- 增量七（2026-09-21，音频）：门禁增加 30 s/48 kHz 立体声 `extract_audio_pcm` 的 realtime 倍数下限（`SCENE_CORE_PERF_MIN_AUDIO_REALTIME`，默认 10×）与样本数精确校验；本地 843× realtime。详见 [audio-acceptance.md](../../acceptance/audio-acceptance.md)。
 
 未完成（需真实资源，不伪装为已通过）：
 
