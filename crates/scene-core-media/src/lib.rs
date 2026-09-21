@@ -5,6 +5,7 @@
 //! through the protocol: callers pass structured requests and receive
 //! structured results.
 
+pub mod audio;
 pub mod hash;
 pub mod preview;
 pub mod probe;
