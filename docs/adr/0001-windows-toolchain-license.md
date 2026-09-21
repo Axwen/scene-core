@@ -1,7 +1,7 @@
 # ADR-0001：Windows 工具链许可档位（BtbN LGPLv3）
 
 日期：2026-09-16
-状态：内部使用已接受；对外分发前必须复审（见“复审门禁”）
+状态：已接受 LGPL-3.0-or-later（内部与对外分发；用户 2026-09-21 决定）；scene-core 自身采用 MIT（见 `LICENSE`）
 
 ## 背景
 
@@ -15,6 +15,7 @@
 1. 接受 BtbN `win64-lgpl-shared` 候选作为 Phase 0/1 的内部使用工具链，仍属 LGPL、无 GPL/nonfree 组件。
 2. lock、package manifest、SBOM 与许可证材料**必须如实记录** `LGPL-3.0-or-later`，不得沿用 LGPL-2.1 示例值。
 3. `distributionProfile` 仍是粗粒度 `lgpl`；版本差异由 SPDX 表达式承担。
+4. 2026-09-21 用户决定：接受 LGPL-3.0-or-later，不切换到自建 `--disable-version3` 构建；scene-core 自身以 MIT 发布。对外分发前补齐随包材料（GPLv3 正文、copyright notices、source offer 说明，见复审材料 G1–G3），不改变工具链与 `toolchainFingerprint`。
 
 ## 后果
 
@@ -24,10 +25,9 @@
 
 ## 复审门禁
 
-首次对外分发前二选一：
+2026-09-21 已由用户选择：接受 LGPL-3.0-or-later（不采用自建 v2.1 路径）。
 
-1. 由用户/法律确认接受 LGPL-3.0-or-later 义务；或
-2. 切换到仓库自建 `--disable-version3` 构建并更新 lock、能力基线、SBOM 与许可材料。
+剩余动作（对外分发前，不改变工具链）：按复审材料的 G1–G3 补齐随包材料（GPLv3 正文、copyright notices、面向收件人的 source offer 说明）。
 
 复审材料（事实、义务对照、选项与决策清单）见 [FFmpeg 工具链对外分发许可复审材料](../legal/ffmpeg-lgpl-review.md)。
 
