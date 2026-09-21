@@ -38,6 +38,10 @@
 
 未完成：子进程树回收的深度检查（当前工具为单进程）、磁盘配额/大文件预算（SC-P1-06 性能基线）。
 
+## Host 并发与配额边界（P2，不在本 ticket 实现）
+
+Protocol 0.1 的 Core 是单请求进程：本 ticket 的 deadline/取消/输出上限只约束当前请求，不引入进程内并发或跨请求配额状态。Host 要同时运行多个 Core 请求前，必须按 [Host 集成与缓存契约](../specs/host-cache-contract.md) §6.1 与[跨仓库契约](../architecture/repositories/cross-repository-contracts.md) §3.4 定义并测试：全局/每 `cacheScope` 最大活动请求数、内存与磁盘配额预留、admission reject、同派生键 single-flight、失败回滚清理，以及继续沿用不可缓存语义（失败/取消/超时/partial 永不命中）。这些验收属于 Host 实施，Core 侧不新增并发或配额实现。
+
 ## 依赖
 
 SC-P1-03、SC-P1-04。

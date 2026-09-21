@@ -13,7 +13,7 @@
 
 ## 验收标准
 
-1. 时间规则验收表（[素材时间规则 §7](../../specs/media-time-policy-draft.md)）中的 Phase 1 行全部有证据。
+1. 时间规则验收表（[素材时间规则 §7](../specs/media-time-policy-draft.md)）中的 Phase 1 行全部有证据。
 2. 性能报告包含设备、命令、P50/P95、峰值内存与输出体积，不承诺未测数值。
 3. 所有拒绝路径有 fixture 与错误码记录；不把规划表当已通过。
 
@@ -44,10 +44,17 @@
 - 用户提供的真实 H.264/AAC MP4（96.52 s，1280x720@30）实测：`probe` 与 ffprobe 逐项一致（容器/时长/起点/时基/尺寸/帧率/采样率），`extract_preview` 产出 opening + midpoint（512x288，presentationTimeMs 诚实为 null）。记录于 `docs/acceptance/real-media-acceptance.md`，样本与文件名不入库。
 - 进程表现：probe 0.02 s / 38.8 MiB；extract_preview 0.13 s / 86.9 MiB；事件无主机路径。
 
+增量六（2026-09-21，CI 性能冒烟门禁）：
+
+- `tests/baselines.rs::performance_smoke_gate`：仅当 `SCENE_CORE_PERF_GATE` 与 `SCENE_CORE_FFMPEG_DIR` 同时设置时运行，否则干净跳过；release 下重复 20 次 probe、10 次 preview，并哈希 64 MiB 临时文件。
+- 阈值（可用环境变量覆盖）：哈希吞吐下限 `SCENE_CORE_PERF_MIN_HASH_MIBPS`=50、probe p95 上限 `SCENE_CORE_PERF_MAX_PROBE_P95_MS`=1500、preview p95 上限 `SCENE_CORE_PERF_MAX_PREVIEW_P95_MS`=3000、抖动比 `SCENE_CORE_PERF_MAX_JITTER_RATIO`=5（判据 `p95 ≤ p50 × ratio + 50 ms`）。
+- 阈值只是共享 runner 上的回归冒烟保护，**不是**发布 SLA；发布数字仍以 `media_baselines` 在专用机器上的测量为准。Linux CI 在锁定工具链步骤后新增 `Run media performance smoke gate` 步骤。
+- 本地实测（2026-09-21，WSL2 x86_64，锁定工具链）：probe p50 10.4 / p95 10.5 ms、preview p50 20.5 / p95 26.2 ms、64 MiB 哈希 3525 MiB/s，均在阈值内。
+
 未完成（需真实资源，不伪装为已通过）：
 
 - 非零/负起点、编辑列表、VFR/B 帧、旋转、附件图、损坏等**真实**样本（合成覆盖已有）；播放器点击对照。
-- 并发/多请求下的峰值内存与磁盘配额（单请求与 20 GiB 已完成）。
+- 并发/多请求下的峰值内存与磁盘配额：Host 侧契约已定义（[host-cache-contract §6.1](../specs/host-cache-contract.md)）；Host 实现与实测仍待 P2。
 
 增量四（2026-09-16，真实样本）：用户提供的真实 H.264/AAC MP4（96.52s，1280x720@30）实测，`probe` 与 ffprobe 逐项一致，`extract_preview` 产出 opening+midpoint（512x288，presentationTimeMs 诚实为 null）；记录于 `docs/acceptance/real-media-acceptance.md`，样本与文件名不入库。
 

@@ -1,6 +1,6 @@
 # `scene-core` 规划包
 
-> 目标仓库：本仓库（`scene-core`）。本文件已从 Web RAG 规划包迁移，当前只描述媒体核心边界，不表示真实媒体运行时已经实现。
+> 目标仓库：本仓库（`scene-core`）。本文件已从 Web RAG 规划包迁移，当前只描述媒体核心边界；P1 已实现 `probe` 与固定 `extract_preview`，不代表后续音频、分析抽帧或分层切分能力已经实现。
 
 ## 1. 定位
 
@@ -25,6 +25,6 @@
 
 ## 3. MVP 结论
 
-MVP 只做：probe、流元数据、音频抽取、封面/关键帧/基础帧、时间戳处理、Hash/Fingerprint、Artifact Manifest、进度、取消、超时、受控错误和资源统计。
+当前 P1 MVP 只做：`probe`、流元数据、固定诊断预览（opening/midpoint）、时间戳处理、Hash/Fingerprint、Artifact Manifest、进度、取消、超时、受控错误和资源统计。
 
-MVP 不做：ASR、OCR、VLM/Caption、Embedding、Rerank、数据库、消息队列、对象存储、索引、Tauri、权限和审计。
+当前 MVP 不做：音频抽取、分析用抽帧、ASR、OCR、VLM/Caption、Embedding、Rerank、Scene/Shot 分层切分、数据库、消息队列、对象存储、索引、Tauri、权限和审计。

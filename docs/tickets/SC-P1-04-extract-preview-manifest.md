@@ -25,7 +25,7 @@
 - 事件：accepted → progress(stage `preview`, total 2) → completed；`implemented_operations()` 现为 `[probe, extract_preview]`，version/doctor/bundle smoke 随之对齐。
 - 测试：preview 合同（640x480 → 512x384；64x48 不放大）、JPEG 解析与秒格式化单元测试、run 会话中 extract_preview 的 manifest 校验；workspace 共 151 tests，clippy 无 allow。
 
-未完成：`presentationTimeMs` 证明（当前诚实为 null）、磁盘不足注入（SC-P1-05）、旋转真实样本。
+边界备注：`presentationTimeMs` 当前无法证明时保持 `null`；磁盘不足注入已由 SC-P1-05 覆盖，旋转真实样本仍属于 SC-P1-06 的真实媒体验收缺口。
 
 ## 依赖
 
