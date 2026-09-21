@@ -218,4 +218,76 @@ mod tests {
         ));
         let _ = std::fs::remove_dir_all(root.root());
     }
+
+    #[test]
+    fn unsafe_reference_forms_are_rejected_before_staging() {
+        for reference in [
+            "output/frame.jpg:metadata",
+            "//server/share/frame.jpg",
+            "\\\\server\\share\\frame.jpg",
+            "../outside/frame.jpg",
+        ] {
+            assert!(
+                RelativeRef::new(reference).is_err(),
+                "unsafe reference was accepted: {reference}"
+            );
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn junction_escapes_are_rejected() {
+        use std::process::Command;
+
+        let outside = temp_root("junction-outside");
+        std::fs::create_dir_all(&outside).expect("outside dir");
+        let root = StagingRoot::new(temp_root("junction")).expect("staging root");
+        let link = root.root().join("output");
+        let link_string = link.to_string_lossy().into_owned();
+        let outside_string = outside.to_string_lossy().into_owned();
+        let output = Command::new("cmd")
+            .args([
+                "/C",
+                "mklink",
+                "/J",
+                link_string.as_str(),
+                outside_string.as_str(),
+            ])
+            .output()
+            .expect("create junction command");
+        assert!(
+            output.status.success(),
+            "mklink /J failed: {}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let reference = RelativeRef::new("output/escape.jpg").expect("ref");
+        assert!(matches!(
+            root.output(&reference),
+            Err(StagingError::EscapesRoot(_))
+        ));
+        let _ = std::fs::remove_dir_all(root.root());
+        let _ = std::fs::remove_dir_all(outside);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn directory_symlink_escapes_are_rejected() {
+        use std::os::windows::fs::symlink_dir;
+
+        let outside = temp_root("symlink-outside");
+        std::fs::create_dir_all(&outside).expect("outside dir");
+        let root = StagingRoot::new(temp_root("windows-symlink")).expect("staging root");
+        let link = root.root().join("output");
+        symlink_dir(&outside, &link).expect("Windows symlink creation requires CI symlink support");
+
+        let reference = RelativeRef::new("output/escape.jpg").expect("ref");
+        assert!(matches!(
+            root.output(&reference),
+            Err(StagingError::EscapesRoot(_))
+        ));
+        let _ = std::fs::remove_dir_all(root.root());
+        let _ = std::fs::remove_dir_all(outside);
+    }
 }

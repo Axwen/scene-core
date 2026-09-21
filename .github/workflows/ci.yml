@@ -54,6 +54,12 @@ jobs:
       - name: Run media and run-session contract tests
         run: cargo +1.85.1 test -p scene-core-media -p scene-core-engine --locked
 
+      - name: Run media performance smoke gate (regression guard, not a release SLA)
+        env:
+          SCENE_CORE_PERF_GATE: "1"
+        run: |
+          cargo +1.85.1 test --release --locked -p scene-core-media --test baselines performance_smoke_gate -- --nocapture
+
   windows:
     name: Windows checks
     runs-on: windows-latest
@@ -72,6 +78,10 @@ jobs:
       - name: Run tests
         shell: pwsh
         run: cargo +1.85.1 test --workspace --locked
+
+      - name: Run Windows staging boundary tests
+        shell: pwsh
+        run: cargo +1.85.1 test -p scene-core-media staging --locked
 
       - name: Verify Windows bundle entrypoint
         shell: pwsh
@@ -126,4 +136,3 @@ jobs:
             packaging/bundles/windows-x86_64/scene-core-*.zip
             packaging/bundles/windows-x86_64/*.sha256
           if-no-files-found: error
-
