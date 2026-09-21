@@ -72,8 +72,9 @@ impl StartRequest {
         self.deadline_ms.unwrap_or(DEFAULT_DEADLINE_MS)
     }
 
-    /// `sha256(RFC8785(effective options))`. Protocol 0.1 registers no
-    /// configurable options, so the effective options are always `{}`.
+    /// `sha256(RFC8785(effective options))`. Options are operation-specific;
+    /// omitted values serialize as `{}` so defaults and explicit `{}` hash the
+    /// same.
     pub fn compute_operation_config_hash(&self) -> Result<Sha256Digest, CanonicalJsonError> {
         let options =
             serde_json::to_value(self.options).expect("operation options serialize as an object");
@@ -93,6 +94,16 @@ impl StartRequest {
                 ),
             ));
         }
+        self.options.validate_for(self.operation).map_err(|error| {
+            Box::new(
+                ProtocolError::invalid_request("options are not valid for the operation")
+                    .with_cause(error.to_string())
+                    .with_stage("validation")
+                    .with_next_step(
+                        "use the options registered for the requested operation in Protocol 0.1.",
+                    ),
+            )
+        })?;
         let computed_config_hash = self.compute_operation_config_hash().map_err(|error| {
             Box::new(
                 ProtocolError::invalid_request("options cannot be canonicalized")
@@ -415,7 +426,7 @@ mod tests {
                 scope: ExecutionScope::Asset,
             },
             deadline_ms: None,
-            options: OperationOptions {},
+            options: OperationOptions::default(),
         }
     }
 

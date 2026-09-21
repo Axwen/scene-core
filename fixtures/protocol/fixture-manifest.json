@@ -889,6 +889,102 @@
         "errorCode": null,
         "exitCode": null
       }
+    },
+    {
+      "file": "valid/control-start-extract-audio-pcm.json",
+      "kind": "valid",
+      "entrypoint": "control",
+      "rule": "minimal valid extract_audio_pcm StartRequest with audioStreamIndex",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "valid/artifact-manifest-audio-pcm.json",
+      "kind": "valid",
+      "entrypoint": "manifest",
+      "rule": "audio PCM Manifest with its mapping fields",
+      "schema": "artifact-manifest.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-options-wrong-operation.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "audioStreamIndex is not registered for probe",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/control-options-audio-unknown-key.json",
+      "kind": "invalid",
+      "entrypoint": "control",
+      "rule": "unknown option key is rejected while parsing",
+      "schema": "control-message.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": "INVALID_REQUEST",
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/manifest-audio-missing-mapping.json",
+      "kind": "invalid",
+      "entrypoint": "manifest",
+      "rule": "audio artifacts require audioPcm mapping fields",
+      "schema": "artifact-manifest.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/manifest-audio-trimmed.json",
+      "kind": "invalid",
+      "entrypoint": "manifest",
+      "rule": "audio requestedTimeMs must stay 0 in Protocol 0.1",
+      "schema": "artifact-manifest.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "invalid/manifest-preview-with-audio-pcm.json",
+      "kind": "invalid",
+      "entrypoint": "manifest",
+      "rule": "preview artifacts must not carry audioPcm",
+      "schema": "artifact-manifest.json",
+      "expect": {
+        "outcome": "reject",
+        "errorCode": null,
+        "exitCode": null
+      }
+    },
+    {
+      "file": "golden-jsonl/extract-audio-pcm-success.jsonl",
+      "kind": "golden-jsonl",
+      "entrypoint": "transcript",
+      "rule": "accepted -> progress -> completed extract_audio_pcm",
+      "schema": "engine-event.json",
+      "expect": {
+        "outcome": "accept",
+        "errorCode": null,
+        "exitCode": 0
+      }
     }
   ]
 }

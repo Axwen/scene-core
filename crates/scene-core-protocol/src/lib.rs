@@ -44,13 +44,15 @@ pub use input::{
     InputDescriptor, InputSetDescriptor, MAX_INPUT_BYTE_SIZE, StagedSourceFacts,
     verify_input_fingerprint, verify_staged_source,
 };
-pub use manifest::{Artifact, ArtifactKind, ArtifactManifest, ArtifactRole};
+pub use manifest::{Artifact, ArtifactKind, ArtifactManifest, ArtifactRole, AudioPcmInfo};
 pub use media::{ContainerInfo, MediaStream, NormalizedMedia, StreamKind};
-pub use operation::{Operation, OperationOptions};
+pub use operation::{AudioPcmOptions, EmptyOptions, Operation, OperationOptions};
 pub use package::{
     DistributionProfile, PackageManifest, PackagedEngine, PackagedFile, PackagedTool,
 };
-pub use result::{ExtractPreviewResult, OperationResult, ProbeResult, ResourceUsage};
+pub use result::{
+    ExtractAudioPcmResult, ExtractPreviewResult, OperationResult, ProbeResult, ResourceUsage,
+};
 pub use segment::{
     SegmentProvenance, TemporalSegment, TemporalSegmentKind, validate_temporal_segments,
 };

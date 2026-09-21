@@ -1,5 +1,21 @@
 {
   "$defs": {
+    "AudioPcmOptions": {
+      "additionalProperties": false,
+      "description": "Options accepted by `extract_audio_pcm`.",
+      "properties": {
+        "audioStreamIndex": {
+          "description": "Explicit ffprobe stream index. Omitted means the lowest non-attached\naudio stream.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
     "CancelMessageType": {
       "enum": [
         "cancel"
@@ -24,6 +40,11 @@
         "messageType",
         "requestId"
       ],
+      "type": "object"
+    },
+    "EmptyOptions": {
+      "additionalProperties": false,
+      "description": "Options accepted by `probe` and `extract_preview`: exactly `{}`.",
       "type": "object"
     },
     "ExecutionContext": {
@@ -103,16 +124,24 @@
       "type": "string"
     },
     "Operation": {
-      "description": "Operations frozen by Protocol 0.1.",
+      "description": "Operations registered by Protocol 0.1.",
       "enum": [
         "probe",
-        "extract_preview"
+        "extract_preview",
+        "extract_audio_pcm"
       ],
       "type": "string"
     },
     "OperationOptions": {
-      "description": "Caller-provided operation options.\n\nProtocol 0.1 registers no configurable options: the only accepted wire\nshape is `{}`. Unknown keys, duplicate keys and non-object shapes are\nrejected while parsing, so no free-form options map can enter the protocol.",
-      "type": "object"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EmptyOptions"
+        },
+        {
+          "$ref": "#/$defs/AudioPcmOptions"
+        }
+      ],
+      "description": "Operation-specific options. The wire shape must match the request\noperation; [`OperationOptions::Empty`] is valid for every operation and is\nthe canonical \"no options\" value.\n\nUnknown keys, duplicate keys and non-object shapes are rejected while\nparsing, so no free-form options map can enter the protocol."
     },
     "OutputContractVersion": {
       "pattern": "^[a-z0-9-]+/[0-9]+$",

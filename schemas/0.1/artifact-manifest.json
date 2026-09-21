@@ -6,6 +6,16 @@
         "artifactId": {
           "$ref": "#/$defs/Identifier"
         },
+        "audioPcm": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AudioPcmInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "byteSize": {
           "format": "uint64",
           "minimum": 0,
@@ -71,17 +81,46 @@
     "ArtifactKind": {
       "description": "Artifact kinds frozen by Protocol 0.1.",
       "enum": [
-        "previewFrame"
+        "previewFrame",
+        "audioPcm"
       ],
       "type": "string"
     },
     "ArtifactRole": {
-      "description": "Fixed diagnostic preview roles.",
+      "description": "Fixed artifact roles: diagnostic preview frames and the extracted audio\ntrack.",
       "enum": [
         "opening",
-        "midpoint"
+        "midpoint",
+        "audio"
       ],
       "type": "string"
+    },
+    "AudioPcmInfo": {
+      "additionalProperties": false,
+      "description": "Audio-specific mapping fields. Present exactly on `audioPcm` artifacts.\n`presentation_time_ms` carries the material time of the first output\nsample; these fields complete the mapping\n`materialTime = presentationTimeMs + sampleIndex / sampleRate`.",
+      "properties": {
+        "channels": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sampleCount": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sampleRate": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sampleRate",
+        "channels",
+        "sampleCount"
+      ],
+      "type": "object"
     },
     "CacheCompatibilityId": {
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
@@ -140,10 +179,11 @@
       "type": "string"
     },
     "Operation": {
-      "description": "Operations frozen by Protocol 0.1.",
+      "description": "Operations registered by Protocol 0.1.",
       "enum": [
         "probe",
-        "extract_preview"
+        "extract_preview",
+        "extract_audio_pcm"
       ],
       "type": "string"
     },

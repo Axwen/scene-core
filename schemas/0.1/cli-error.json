@@ -18,6 +18,7 @@
         "UNSUPPORTED_INPUT",
         "CORRUPT_MEDIA",
         "MISSING_VIDEO_STREAM",
+        "MISSING_AUDIO_STREAM",
         "RESOURCE_LIMIT",
         "TOOL_UNAVAILABLE",
         "TOOL_FAILED",

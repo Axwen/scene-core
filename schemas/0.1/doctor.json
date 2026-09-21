@@ -122,10 +122,11 @@
       "type": "object"
     },
     "Operation": {
-      "description": "Operations frozen by Protocol 0.1.",
+      "description": "Operations registered by Protocol 0.1.",
       "enum": [
         "probe",
-        "extract_preview"
+        "extract_preview",
+        "extract_audio_pcm"
       ],
       "type": "string"
     },
