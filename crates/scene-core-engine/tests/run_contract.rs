@@ -306,6 +306,15 @@ fn violations_and_tool_failures_end_failed() {
             .code,
         ErrorCode::ToolUnavailable
     );
+
+    let (events, exit_code) = session_for(Operation::ExtractPreview, Mode::ToolUnavailable);
+    assert_eq!(exit_code, 2);
+    let error = events
+        .last()
+        .and_then(|event| event.error.as_ref())
+        .expect("preview error");
+    assert_eq!(error.code, ErrorCode::ToolUnavailable);
+    assert_eq!(error.stage.as_deref(), Some("preview"));
 }
 
 #[test]

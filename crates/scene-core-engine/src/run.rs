@@ -562,13 +562,13 @@ pub fn run_session(
             emit,
         ),
         Err(failure) => {
-            let error = failure_error(&failure);
+            let error = failure_error(request.operation, &failure);
             terminal_failure(&echo, engine, 3, EventType::Failed, error, emit)
         }
     }
 }
 
-fn failure_error(failure: &MediaFailure) -> ProtocolError {
+fn failure_error(operation: Operation, failure: &MediaFailure) -> ProtocolError {
     let code = failure.code();
     let message = match failure {
         MediaFailure::ToolUnavailable => "the fixed media tool is unavailable",
@@ -581,7 +581,11 @@ fn failure_error(failure: &MediaFailure) -> ProtocolError {
         MediaFailure::Cancelled => "the request was cancelled",
         MediaFailure::Internal => "an internal error occurred",
     };
-    ProtocolError::new(code, message).with_stage("probe")
+    let stage = match operation {
+        Operation::Probe => "probe",
+        Operation::ExtractPreview => "preview",
+    };
+    ProtocolError::new(code, message).with_stage(stage)
 }
 
 pub fn timeout_error() -> ProtocolError {

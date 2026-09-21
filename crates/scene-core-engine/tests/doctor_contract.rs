@@ -286,6 +286,50 @@ fn missing_and_tampered_files_fail_bundle_files() {
     let _ = fs::remove_dir_all(&bundle.root);
 }
 
+#[cfg(unix)]
+#[test]
+fn listed_symlinked_file_fails_bundle_files() {
+    let bundle = build_bundle("symlinked-file");
+    let outside = temp_root("symlinked-file-target");
+    fs::write(&outside, b"ffmpeg-binary").expect("write target");
+    fs::remove_file(bundle.root.join("bin/ffmpeg.exe")).expect("remove regular file");
+    std::os::unix::fs::symlink(&outside, bundle.root.join("bin/ffmpeg.exe"))
+        .expect("create symlink");
+
+    let output = doctor(&bundle, Some(&bundle.trusted), &healthy_runner());
+    assert_eq!(
+        check(&output, "bundle-files").code,
+        Some(DoctorCheckCode::BundleFileInvalid)
+    );
+
+    let _ = fs::remove_file(bundle.root.join("bin/ffmpeg.exe"));
+    let _ = fs::remove_dir_all(&bundle.root);
+    let _ = fs::remove_file(outside);
+}
+
+#[cfg(windows)]
+#[test]
+fn listed_reparse_file_fails_bundle_files() {
+    use std::os::windows::fs::symlink_file;
+
+    let bundle = build_bundle("reparse-file");
+    let outside = temp_root("reparse-file-target");
+    fs::write(&outside, b"ffmpeg-binary").expect("write target");
+    fs::remove_file(bundle.root.join("bin/ffmpeg.exe")).expect("remove regular file");
+    symlink_file(&outside, bundle.root.join("bin/ffmpeg.exe"))
+        .expect("Windows CI must allow test symlink creation");
+
+    let output = doctor(&bundle, Some(&bundle.trusted), &healthy_runner());
+    assert_eq!(
+        check(&output, "bundle-files").code,
+        Some(DoctorCheckCode::BundleFileInvalid)
+    );
+
+    let _ = fs::remove_file(bundle.root.join("bin/ffmpeg.exe"));
+    let _ = fs::remove_dir_all(&bundle.root);
+    let _ = fs::remove_file(outside);
+}
+
 #[test]
 fn trust_anchor_is_required_and_verified() {
     let bundle = build_bundle("trust");
