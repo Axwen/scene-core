@@ -73,7 +73,25 @@ foreach ($operation in @("probe", "extract_preview")) {
 if (-not (Test-Path (Join-Path $runRoot "output/preview/opening.jpg"))) {
     throw "extract_preview did not produce the opening artifact"
 }
-Write-Output "in-bundle run: probe and extract_preview completed"
+
+$audioRoot = Join-Path $WorkRoot "run-audio"
+if (Test-Path $audioRoot) { Remove-Item -Recurse -Force $audioRoot }
+New-Item -ItemType Directory -Force -Path (Join-Path $audioRoot "input") | Out-Null
+$audioSample = Join-Path $audioRoot "input/source.media"
+& (Join-Path $BundleRoot "bin/ffmpeg.exe") -hide_banner -loglevel error -nostdin -f lavfi `
+    -i "sine=frequency=440:duration=1:sample_rate=48000" -ac 2 -c:a pcm_s16le -f matroska -y $audioSample 2>$null
+if ($LASTEXITCODE -ne 0) { throw "could not generate the in-bundle audio sample" }
+$request = & python (Join-Path $PSScriptRoot "make-run-request.py") extract_audio_pcm $audioSample $versionJson.toolchainFingerprint
+if ($LASTEXITCODE -ne 0) { throw "could not build the extract_audio_pcm request" }
+$events = $request | & $exe run --staging-root $audioRoot
+if ($LASTEXITCODE -ne 0) { throw "extract_audio_pcm failed inside the bundle" }
+$eventsText = ($events -join "`n")
+if ($eventsText -notmatch '"eventType":"completed"') { throw "extract_audio_pcm did not complete" }
+if ($eventsText -notmatch '"audioPcm"') { throw "extract_audio_pcm did not report the audio mapping" }
+if (-not (Test-Path (Join-Path $audioRoot "output/audio/track.wav"))) {
+    throw "extract_audio_pcm did not produce the track artifact"
+}
+Write-Output "in-bundle run: probe, extract_preview and extract_audio_pcm completed"
 
 function New-BundleCopy([string]$Name) {
     $target = Join-Path $WorkRoot $Name

@@ -192,6 +192,39 @@ fn performance_smoke_gate() {
     let _ = hash_file(&large).expect("hash");
     let throughput = hash_mib as f64 / started.elapsed().as_secs_f64();
 
+    // Audio extraction: 30 s of 48 kHz stereo PCM; the floor is a regression
+    // guard on the extraction pipeline, not a release SLA.
+    let audio_seconds = 30_u64;
+    let audio_media = dir.join("gate-audio.mkv");
+    ffmpeg(
+        &toolchain,
+        &[
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=30:sample_rate=48000",
+            "-ac",
+            "2",
+            "-c:a",
+            "pcm_s16le",
+            "-f",
+            "matroska",
+            "-y",
+            &audio_media.to_string_lossy(),
+        ],
+    );
+    let audio_output = dir.join("gate-audio.wav");
+    let started = Instant::now();
+    let audio_info =
+        scene_core_media::audio::extract(&toolchain, &audio_media, 0, &audio_output, None)
+            .expect("audio extraction");
+    let audio_elapsed = started.elapsed().as_secs_f64();
+    let audio_realtime = audio_seconds as f64 / audio_elapsed;
+    let min_audio_realtime = limit("SCENE_CORE_PERF_MIN_AUDIO_REALTIME", 10.0);
+
     let probe_p50_ms = millis(percentile(&mut probe_times, 0.5));
     let probe_p95_ms = millis(percentile(&mut probe_times, 0.95));
     let preview_p50_ms = millis(percentile(&mut preview_times, 0.5));
@@ -201,7 +234,18 @@ fn performance_smoke_gate() {
         "perf smoke: probe p50={probe_p50_ms:.1}ms p95={probe_p95_ms:.1}ms (limit {max_probe_p95_ms}ms) | \
          preview p50={preview_p50_ms:.1}ms p95={preview_p95_ms:.1}ms (limit {max_preview_p95_ms}ms) | \
          hash {hash_mib} MiB {throughput:.0} MiB/s (floor {min_hash_mibps} MiB/s) | \
+         audio {audio_seconds}s {audio_realtime:.0}x realtime (floor {min_audio_realtime}x) | \
          jitter ratio limit {max_jitter_ratio}"
+    );
+
+    assert_eq!(
+        audio_info.sample_count,
+        audio_seconds * u64::from(audio_info.sample_rate),
+        "the extracted audio length must match the generated track"
+    );
+    assert!(
+        audio_realtime >= min_audio_realtime,
+        "audio extraction {audio_realtime:.1}x realtime is below the smoke floor {min_audio_realtime}x"
     );
 
     assert!(

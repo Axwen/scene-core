@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Print a Protocol 0.1 StartRequest for a staged `input/source.media` file.
 
-Usage: make-run-request.py <probe|extract_preview> <media-path> <toolchain-fingerprint>
+Usage: make-run-request.py <probe|extract_preview|extract_audio_pcm> <media-path> <toolchain-fingerprint>
 
 The media file must already be staged as `input/source.media` inside the
 staging root passed to `scene-core run`.
@@ -38,7 +38,14 @@ def main():
         "inputSetVersion": "1",
         "inputs": [{"role": "source_media", "contentHash": content, "byteSize": size}],
     }))
-    contract = "probe-result/1" if operation == "probe" else "extract-preview-result/1"
+    contracts = {
+        "probe": "probe-result/1",
+        "extract_preview": "extract-preview-result/1",
+        "extract_audio_pcm": "extract-audio-pcm-result/1",
+    }
+    if operation not in contracts:
+        raise SystemExit(f"unknown operation: {operation}")
+    contract = contracts[operation]
     derivation_key = digest(canonical({
         "derivationDescriptorVersion": "1",
         "engineCacheCompatibilityId": "scene-core-output-v1",

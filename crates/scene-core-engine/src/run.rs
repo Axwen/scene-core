@@ -401,8 +401,7 @@ impl MediaBackend for ProbeBackend {
             .map_err(|_| MediaFailure::Internal)?
             .len();
         let content_hash = hash_file(&path).map_err(|_| MediaFailure::Internal)?;
-        let actual_start_ms =
-            u64::try_from(stream_start_ms.max(0)).map_err(|_| MediaFailure::Internal)?;
+        let actual_start_ms = material_start_ms(stream_start_ms)?;
         let artifact = Artifact {
             artifact_id: Identifier::new("audio-pcm").map_err(|_| MediaFailure::Internal)?,
             kind: ArtifactKind::AudioPcm,
@@ -426,6 +425,12 @@ impl MediaBackend for ProbeBackend {
             artifacts: vec![artifact],
         })
     }
+}
+
+/// Material time of the first output sample: pre-roll before the container
+/// origin is not part of the artifact, so negative stream starts clamp to 0.
+fn material_start_ms(stream_start_ms: i64) -> Result<u64, MediaFailure> {
+    u64::try_from(stream_start_ms.max(0)).map_err(|_| MediaFailure::Internal)
 }
 
 /// Lowest non-attached audio stream, or the explicitly requested index.
@@ -964,6 +969,17 @@ mod tests {
     fn civil_dates_cover_epoch_and_leap_day() {
         assert_eq!(civil_from_days(0), (1970, 1, 1));
         assert_eq!(civil_from_days(19_782), (2024, 2, 29));
+    }
+
+    #[test]
+    fn audio_material_start_clamps_pre_roll_to_zero() {
+        assert_eq!(material_start_ms(-80).expect("negative start"), 0);
+        assert_eq!(material_start_ms(0).expect("zero start"), 0);
+        assert_eq!(material_start_ms(80).expect("positive start"), 80);
+        assert_eq!(
+            material_start_ms(i64::MAX).expect("large start"),
+            i64::MAX as u64
+        );
     }
 
     #[test]
