@@ -183,6 +183,6 @@ Synthesized from this review's findings. 按批准的推荐方案落地；checkb
 
 **VERDICT:** CEO + ENG CLEARED — ready to implement Phase 0A; Phase 0B remains a required release gate. No UI review is needed for this plan.
 
-用户已确认增量审查的时间规则，详见 [media-extension-review.md](media-extension-review.md)；SC-P0-02 的 DTO、纯转换和校验已实现并通过 `cargo test --workspace`，SC-P0-03 的 Schema/fixture 与真实媒体验收仍未完成。
+用户已确认增量审查的时间规则，详见 [media-extension-review.md](media-extension-review.md)；SC-P0-02/03 的 DTO、纯转换、Schema/fixture 与 runner 已实现并通过 `cargo test --workspace`，真实媒体与 Windows 手动验收记录见 [acceptance/](../../../acceptance/manual-verification.md)。本计划的历史门禁状态以 P0/P1 Epic 与审查记录为准，不再在此重复。
 
 NO UNRESOLVED DECISIONS

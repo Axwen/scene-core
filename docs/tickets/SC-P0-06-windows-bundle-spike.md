@@ -50,7 +50,7 @@
 
 未完成：
 
-- 许可确认（候选为 LGPL-3.0-or-later，或改为自建 `--disable-version3`）必须在对外分发前完成。
+- 许可确认（候选为 LGPL-3.0-or-later，或改为自建 `--disable-version3`）必须在对外分发前完成；复审材料与随包缺口清单见 [ffmpeg-lgpl-review.md](../legal/ffmpeg-lgpl-review.md)。
 - engine 改为静态 CRT 后，建议在干净 Windows 上重跑一次 `version`/`doctor` 正向命令留档（命令与 `package-manifest.json.sha256` 会随新构件变化）。
 
 ## 依赖
