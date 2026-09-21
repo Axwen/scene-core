@@ -64,11 +64,31 @@
 | P2（第四轮） | 超限/非法 UTF-8/协议违规只记录违规、不退出控制读取循环，持续无换行输入会一直读下去 | 抽出 `read_control_lines`，任一 framing 违规或已存在违规即退出循环 | `control_reader_stops_on_an_endless_oversized_line`、`control_reader_stops_after_an_invalid_utf8_line`、`control_reader_stops_after_a_protocol_violation`（去掉退出即三项失败） |
 | 额外（TS 探测） | MPEG-TS 的 `coded_width: 0` 被当成零尺寸流，导致 probe `ENGINE_INTERNAL` | `0` 视为未知；尺寸/采样率/声道只保留正值 | `zero_coded_dimensions_from_mpegts_are_unknown`；真实 TS probe + extract_preview 端到端通过 |
 
+### 第二轮 Eng Review（2026-09-21）
+
+范围：T1–T5 工作树改动（doctor/staging 链接边界、失败 stage、许可证引用闭合、文档状态、Windows staging 测试与 CI step）。结论：**CLEAN**（实现、契约、本地门禁与 Windows CI）；Windows staging/junction/symlink 与 reparse 用例已由 PR #28 的 Windows checks 实测通过，无静默跳过。
+
+| 项 | 证据 | 判定 |
+|---|---|---|
+| T1 doctor 链接/reparse 拒绝 | `cargo test -p scene-core-engine --test doctor_contract`（Linux 8/8）；`listed_symlinked_file_fails_bundle_files` / `listed_reparse_file_fails_bundle_files`；错误映射保持 `BUNDLE_FILE_INVALID` | CLEAN |
+| T2 失败 stage 按 operation | preview 工具失败 stage=`preview`、probe=`probe`；timeout/cancel 仍为 `run`（`run.rs:593`、`run.rs:598`）；`run_contract` 断言通过 | CLEAN |
+| T3 许可证引用闭合 | `package.rs` 要求 `thirdPartyLicensesRef/` 下至少一个已列文件，相似前缀目录被拒；`build-windows-bundle.ps1` 生成 `THIRD_PARTY_LICENSES/COPYING.LGPLv3` 并计入 `files`，真实 bundle 不受影响 | CLEAN |
+| T4 文档状态同步与链接 | P0 Epic、实现计划与验收记录措辞一致，无“Phase 1 未创建”“媒体运行时未实现”残留；`docs/**` 57 条相对链接全部可解析（本轮修复 5 处越级路径） | CLEAN |
+| T5 Windows staging 边界 | Linux staging 6/6 通过（ADS/UNC/traversal 词法拒绝 + Unix symlink）；Windows 运行时 junction/symlink/unsafe-ref 用例在 PR #28 的 Windows checks 中通过；CI step `cargo +1.85.1 test -p scene-core-media staging --locked` | CLEAN |
+
+本地门禁：`cargo fmt --all -- --check`、`cargo check --workspace --locked`、`cargo test --workspace --locked`、`cargo clippy --workspace --all-targets --locked -- -D warnings`、`bash scripts/check-schema-drift.sh`、`git diff --check` 全部通过；另执行 `cargo check -p scene-core-media -p scene-core-engine --tests --target x86_64-pc-windows-msvc --locked` 覆盖 `#[cfg(windows)]` 测试代码。
+
+非阻断观察（本轮不新增代码）：
+
+1. `collect_files` 对 reparse 拒绝复用“bundle directory could not be walked”文案，错误码正确但诊断不够精确。
+2. Windows symlink 用例依赖 runner 允许创建符号链接（junction 用例不依赖特权）；首次 Windows CI 运行若失败，应显式修复或前置能力检查，不能改为静默跳过。
+3. `path_contains_link_or_reparse` 对每个已列文件重走祖先路径（O(files×depth)），当前 bundle 规模无影响。
+
 ### 仍然开放（不阻塞 Phase 1 结项）
 
-1. ~~真实/公开脱敏样本、预览期望图与播放器点击对照~~ 已完成，见 [manual-verification.md](../../acceptance/manual-verification.md) 与 [real-media-acceptance.md](../../acceptance/real-media-acceptance.md)。
-2. 并发/多请求下的峰值内存与磁盘配额（单请求 20 GiB 已实测：567 MiB/s、峰值 152 MiB）。
-3. 聚焦 Eng Review：本轮审查发现已修复并留证，结论待用户按既有流程复核。
+1. ~~真实/公开脱敏样本、预览期望图与播放器点击对照~~ 已完成，见 [manual-verification.md](../acceptance/manual-verification.md) 与 [real-media-acceptance.md](../acceptance/real-media-acceptance.md)。
+2. 并发/多请求下的峰值内存与磁盘配额：单请求与 20 GiB 已实测（567 MiB/s、峰值 152 MiB）；Host 侧准入、配额与 single-flight 契约已定义（[host-cache-contract](../specs/host-cache-contract.md) §6.1），Host 实现与实测待 P2。
+3. 聚焦 Eng Review：第一轮审查发现已修复并留证；第二轮复核（2026-09-21）结论 CLEAN，见上节与 [media-extension-review.md](../architecture/repositories/scene-core/media-extension-review.md) 报告；Windows 运行时条件测试已在 PR #28 的 Windows checks 中通过（`listed_reparse_file_fails_bundle_files`、junction/symlink 用例均 ok）。
 4. ~~Windows sidecar 内的 `run` 端到端实测~~ 已在干净 Windows 上以 bundle artifact 跑通 probe/extract_preview 与负向矩阵。
 
 ## 完成定义

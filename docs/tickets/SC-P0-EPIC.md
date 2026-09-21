@@ -16,7 +16,7 @@
 
 ## 明确不做
 
-不实现真实 `run` 媒体操作、probe、preview、PCM、shot/scene 检测、缓存数据库、Tauri、AppContainer、Job Object、安装包、最终签名、AI Adapter 或 GitHub Issue 创建。
+P0 不实现真实 `run` 媒体操作、probe、preview、PCM、shot/scene 检测、缓存数据库、Tauri、AppContainer、Job Object、安装包、最终签名、AI Adapter 或 GitHub Issue 创建；这些能力在已创建的 P1 Epic 中交付。
 
 ## Tickets
 
@@ -56,4 +56,4 @@
 1. **对外分发前的许可复审**：接受 LGPL-3.0-or-later 或切自建 `--disable-version3`（ADR-0001 复审门禁）。
 2. 静态 CRT 新构件建议在干净 Windows 上重跑一次 `version`/`doctor` 正向命令留档。
 3. 聚焦 Eng Review：本 Epic 完成定义要求无阻断项；建议由用户按既有审查流程执行（可基于本表证据复核）。
-4. Phase 1 tickets 尚未创建（下一步）。
+4. P1 Engine Core 已在 [SC-P1-EPIC](SC-P1-EPIC.md) 中拆分并完成首轮实现；Windows 条件测试和后续 P2 门禁仍按该 Epic 跟踪。

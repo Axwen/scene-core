@@ -191,6 +191,19 @@ impl PackageManifest {
                 ));
             }
         }
+        let license_prefix = format!("{}/", self.third_party_licenses_ref.as_str());
+        if !listed
+            .iter()
+            .any(|path| path.starts_with(license_prefix.as_str()))
+        {
+            return Err(ValidationError::new(
+                "files",
+                format!(
+                    "must list at least one file below the third-party license directory '{}'",
+                    self.third_party_licenses_ref.as_str()
+                ),
+            ));
+        }
         Ok(())
     }
 
@@ -253,6 +266,7 @@ mod tests {
             ],
             files: vec![
                 file("SBOM.spdx.json"),
+                file("THIRD_PARTY_LICENSES/LICENSE.ffmpeg"),
                 file("bin/ffmpeg.exe"),
                 file("bin/ffprobe.exe"),
                 file("bin/scene-core.exe"),
@@ -296,6 +310,30 @@ mod tests {
             .files
             .retain(|entry| entry.path.as_str() != "bin/scene-core.exe");
         assert!(value.validate().is_err());
+    }
+
+    #[test]
+    fn third_party_license_directory_must_be_listed() {
+        let mut value = manifest();
+        value
+            .files
+            .retain(|entry| !entry.path.as_str().starts_with("THIRD_PARTY_LICENSES/"));
+        assert!(value.validate().is_err());
+
+        let mut similar_prefix = manifest();
+        similar_prefix
+            .files
+            .retain(|entry| !entry.path.as_str().starts_with("THIRD_PARTY_LICENSES/"));
+        similar_prefix
+            .files
+            .push(file("THIRD_PARTY_LICENSES_BACKUP/LICENSE.ffmpeg"));
+        similar_prefix.files.sort_by(|left, right| {
+            left.path
+                .as_str()
+                .as_bytes()
+                .cmp(right.path.as_str().as_bytes())
+        });
+        assert!(similar_prefix.validate().is_err());
     }
 
     #[test]

@@ -44,11 +44,11 @@ Phase 0A 完成后，Phase 1 可以开始媒体 operation 的实现；但正式 
 - `docs/tickets/SC-P0-01` 至 `SC-P0-07`：Issue-ready 的纵向任务拆分与依赖关系。
 - `engine-contract.md`：Protocol 0.1 消费侧摘要，Rust DTO 为事实源。
 - `cross-repository-contracts.md`：Web RAG、scene-core、scene-seek 的边界和迁移约束。
-- `crates/scene-core-protocol` 已实现 Protocol 0.1 严格 DTO/解析、canonical JSON 摘要、输入与派生身份、`TemporalSegment` 校验和已确认时间规则的纯转换，并有 110 个通过用例（含事件状态机与 fixture conformance）；`schemas/0.1/`、`fixtures/protocol/**`、`version`/`doctor` 和媒体运行时仍未实现。本次增量审查提供 plan-level 证据，不声称新增功能或 Windows 验证通过。
+- `crates/scene-core-protocol` 已实现 Protocol 0.1 严格 DTO/解析、canonical JSON 摘要、输入与派生身份、`TemporalSegment` 校验和已确认时间规则的纯转换；`schemas/0.1/`、`fixtures/protocol/**`、`version`/`doctor` 与 P1 媒体运行时均已落地。Linux 本地检查和合成媒体契约测试已通过；Windows 条件测试、真实媒体/播放器复核和大文件基线仍需按当前验收记录执行。本段保留为历史计划背景，不替代当前代码与 ticket 状态。
 
 ## NOT in scope
 
-真实 `run` 媒体执行（Phase 0）、ASR、OCR、VLM、Embedding、Rerank、检索、Evidence、Citation、数据库、队列、对象存储、完整 Tauri/React UI、完整 shot/scene segmentation、HTTP/gRPC、daemon、自动更新、macOS、GPU 加速、公共 Rust library API、消费者 Adapter、安装包和远程 GitHub 操作。
+消费者侧媒体扩展（音频抽取、分析用抽帧、ASR、OCR、VLM、Embedding、Rerank、检索、Evidence、Citation）、数据库、队列、对象存储、完整 Tauri/React UI、完整 shot/scene segmentation、HTTP/gRPC、daemon、自动更新、macOS、GPU 加速、公共 Rust library API、消费者 Adapter、安装包和远程 GitHub 操作。
 
 ## Failure Modes and Guardrails
 
@@ -65,7 +65,7 @@ Phase 0A 完成后，Phase 1 可以开始媒体 operation 的实现；但正式 
 
 ## Test Coverage Review
 
-测试使用 Rust 内置 `cargo test --workspace`；协议 DTO/校验/时间转换的 Phase 0 用例已落地，下列媒体与 CLI 路径待实现：
+测试使用 Rust 内置 `cargo test --workspace`；协议 DTO/校验/时间转换、媒体执行与 CLI 路径均已落地，以下流程图描述当前验证入口和跨仓库边界：
 
 ```text
 Consumer/Host
@@ -77,7 +77,7 @@ Consumer/Host
        -> strict DTO + semantic validation
        -> inputFingerprint + derivationKey recomputation
        -> staging containment + regular-file/hash validation
-       -> operation dispatch
+       -> operation dispatch (`probe` / `extract_preview`)
             -> accepted(seq=1)
             -> progress* (stage monotonic)
             -> completed(result + Manifest)

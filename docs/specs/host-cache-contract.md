@@ -78,6 +78,29 @@ run status        ∈ {queued, running, retrying}（写回门槛）
 
 租约、并发去重（single-flight）、缓存索引、保留、逐出、磁盘配额、加密与备份全部属于 Host；Core 只提供 descriptor/key 计算、Schema 与 conformance fixture，不写任何数据库。
 
+### 6.1 Host 并发准入与配额（P2 边界）
+
+本节定义 Host 允许多个 Core 请求并发前的验收边界。Protocol 0.1 的 Core 仍是**单请求进程**：一个 `run` 会话只服务一个 StartRequest，不实现进程内并发、线程池或跨请求共享状态。Host 侧的并发、排队和配额尚未实现，本节是其实施规格，不是已交付能力。
+
+```text
+Host admission
+  -> (cacheScope, derivationKey) single-flight：同键活动请求合并为一个 leader
+  -> 全局/每 cacheScope 活动请求上限；超出 -> admission reject（不启动 Core）
+  -> 内存预留 + 每请求 staging 磁盘配额检查
+  -> 启动 Core（单请求进程，私有 staging）
+  -> 完成/失败后释放预留、清理 staging、结束租约
+```
+
+- **最大活动请求数**：Host 维护全局上限与每 `cacheScope` 上限；两者任一饱和即拒绝新 admission。数值由 Host 按部署配置，不在 Core 协议中传递。
+- **内存配额**：按活动请求数预留峰值内存预算（参考单请求实测峰值 152 MiB），预留失败即 admission reject；Core 不读取宿主机内存，只受自身输出上限约束。
+- **磁盘配额**：每个 staging 在启动 Core 前校验 `input + 输出上限 + 余量` 是否落在剩余配额内；预留为 staging 生命周期内的记账，失败按 `admission reject` 处理，不启动 Core。
+- **single-flight**：同一 `(cacheScope, derivationKey)` 只允许一个 leader 执行；跟随者等待同一完成事件（成功则按 §4 缓存命中路径注册新 Run，失败/取消/超时则各自得到不可缓存终态），不得并发跑同一派生工作。
+- **admission reject 语义**：拒绝是可报告的 Host 状态（队列满/配额不足），不产生 Core `failed` 事件、不创建 Run、不写入缓存，且不得以重试掩盖为部分成功。
+- **失败清理与不可缓存**：§4 的不可缓存集合在并发下不变；leader 失败必须通知并释放全部等待者与预留，跟随者不得复用 leader 的 staging 或 partial 产物。
+- **顺序性**：admission → 预留 → 启动 → 完成校验 → finalize → 释放；任何一步失败都回滚该请求全部 Host 侧状态（staging、租约、预留），不留下孤儿进程或半初始化索引项。
+
+Core 侧不新增并发实现；当 Host 需要多请求吞吐时，由 Host 决定进程池或队列策略，Core 的单请求契约和退出码矩阵保持不变。
+
 ## 7. 迁移说明
 
 `scene-seek` 现阶段按 `sourceVersionId`/provider version/input fingerprint 查找成功 Run 来复用字幕。这是迁移输入，不是 Core `derivationKey` 的兼容约束：它没有覆盖 operation config、output contract 与 toolchain。迁移后旧索引可以保留为历史，但不得作为 `(cacheScope, derivationKey)` 缓存命中源，也不得跳过 current-result gate。

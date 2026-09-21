@@ -287,6 +287,15 @@ fn next_step(code: DoctorCheckCode) -> &'static str {
 fn check_bundle_files(root: &Path, manifest: &PackageManifest) -> Result<(), DoctorCheck> {
     for file in &manifest.files {
         let path = root.join(file.path.as_str());
+        if let Err(error) = path_contains_link_or_reparse(root, Path::new(file.path.as_str())) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                return Err(failure(
+                    "bundle-files",
+                    DoctorCheckCode::BundleFileInvalid,
+                    "a listed bundle path is a symlink or reparse point",
+                ));
+            }
+        }
         let bytes = fs::read(&path).map_err(|_| {
             failure(
                 "bundle-files",
@@ -339,6 +348,13 @@ fn collect_files(root: &Path, dir: &Path, files: &mut BTreeSet<String>) -> std::
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         let file_type = entry.file_type()?;
+        let metadata = fs::symlink_metadata(entry.path())?;
+        if is_link_or_reparse(&metadata) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "bundle contains a symlink or reparse point",
+            ));
+        }
         if file_type.is_dir() {
             collect_files(root, &entry.path(), files)?;
         } else if file_type.is_file() {
@@ -354,6 +370,51 @@ fn collect_files(root: &Path, dir: &Path, files: &mut BTreeSet<String>) -> std::
         }
     }
     Ok(())
+}
+
+fn path_contains_link_or_reparse(root: &Path, relative: &Path) -> std::io::Result<()> {
+    let root_metadata = fs::symlink_metadata(root)?;
+    if is_link_or_reparse(&root_metadata) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "bundle root is a symlink or reparse point",
+        ));
+    }
+
+    let mut current = root.to_path_buf();
+    for component in relative.components() {
+        let std::path::Component::Normal(part) = component else {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "bundle path contains a non-normal component",
+            ));
+        };
+        current.push(part);
+        let metadata = fs::symlink_metadata(&current)?;
+        if is_link_or_reparse(&metadata) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "bundle path contains a symlink or reparse point",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn is_link_or_reparse(metadata: &fs::Metadata) -> bool {
+    if metadata.file_type().is_symlink() {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
+        return metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0;
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
 }
 
 fn check_capabilities(

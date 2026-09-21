@@ -27,7 +27,7 @@
 - 无工具链时仍先 `accepted` 再 `TOOL_UNAVAILABLE` 失败；`SCENE_CORE_FFMPEG_DIR` + `SCENE_CORE_TOOLCHAIN_FINGERPRINT` 为开发/CI 注入点（bundle 内自动读取 descriptor）。
 - 测试：7 个 run 合同测试（含真实工具链的端到端 probe：生成合成媒体 → staging → 进程 → 事件校验），workspace 共 146 tests，clippy 无 allow。
 
-未完成：extract_preview 的 `run` 分发（SC-P1-04）、磁盘不足注入（SC-P1-05）。
+历史备注：本 ticket 初次实现时尚未包含 `extract_preview` 的 `run` 分发和磁盘不足注入；两项已分别由 SC-P1-04、SC-P1-05 完成，当前结项以 SC-P1-EPIC 汇总表为准。
 
 ## 依赖
 

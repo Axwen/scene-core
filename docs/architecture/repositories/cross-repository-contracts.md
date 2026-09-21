@@ -72,7 +72,19 @@ run status       ∈ {queued, running, retrying} at write gate
 
 ### 3.3 缓存契约
 
-持久缓存键固定为 `(cacheScope, derivationKey)`：`cacheScope` 至少隔离租户/用户、权限域与存储域，绝不进入引擎协议；`derivationKey` 覆盖输入、operation、有效配置、输出契约、engine cache compatibility 与 toolchain fingerprint，不含 request/source/run identity。只有完整、成功、退出码 0、Manifest/文件/hash 全校验并原子 finalize 的不可变集合可以缓存；失败、取消、超时、崩溃与 partial 产物永不命中。缓存命中必须创建新的 Run/provenance 并重新执行 current-result gate。细节见 [Host 集成与缓存契约](../specs/host-cache-contract.md)。
+持久缓存键固定为 `(cacheScope, derivationKey)`：`cacheScope` 至少隔离租户/用户、权限域与存储域，绝不进入引擎协议；`derivationKey` 覆盖输入、operation、有效配置、输出契约、engine cache compatibility 与 toolchain fingerprint，不含 request/source/run identity。只有完整、成功、退出码 0、Manifest/文件/hash 全校验并原子 finalize 的不可变集合可以缓存；失败、取消、超时、崩溃与 partial 产物永不命中。缓存命中必须创建新的 Run/provenance 并重新执行 current-result gate。细节见 [Host 集成与缓存契约](../../specs/host-cache-contract.md)。
+
+### 3.4 Host 并发准入与配额（P2 边界）
+
+Core 在 Protocol 0.1 保持单请求进程（一个 `run` 会话一个 StartRequest）；Host 在允许一个进程同时运行多个 Core 请求前必须定义并实现：
+
+- 全局与每 `cacheScope` 的最大活动请求数；任一饱和即 admission reject，不启动 Core、不创建 Run；
+- 启动前完成内存与 staging 磁盘配额预留（含 input + 输出上限 + 余量），预留失败同样按 admission reject 处理；
+- 同 `(cacheScope, derivationKey)` 的 single-flight：只有 leader 执行，跟随者共享完成事件，不并发执行同一派生工作；
+- 固定顺序 admission → 预留 → 启动 → 完成校验 → finalize → 释放；任一步失败回滚该请求全部 Host 状态（staging、租约、预留），不留孤儿进程或半初始化索引项；
+- §3.3 的不可缓存语义在并发下不变：失败、取消、超时、崩溃与 partial 产物永不命中，跟随者不得复用 leader 的 staging 或部分产物。
+
+细节和验收边界见 [Host 集成与缓存契约](../../specs/host-cache-contract.md) §6.1；Core 协议不新增并发、配额或调度字段。
 
 ## 4. 媒体引擎交换协议
 
