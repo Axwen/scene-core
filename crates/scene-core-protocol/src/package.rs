@@ -142,6 +142,12 @@ impl PackageManifest {
                 ));
             }
             tool.validate()?;
+            if !tool.license_profile.as_str().starts_with("LGPL-") {
+                return Err(ValidationError::new(
+                    "tools[].licenseProfile",
+                    "must be an LGPL expression for the lgpl distribution profile",
+                ));
+            }
         }
         validate_unique(
             "tools[].name",
@@ -192,6 +198,15 @@ impl PackageManifest {
             }
         }
         let license_prefix = format!("{}/", self.third_party_licenses_ref.as_str());
+        if let Some(required) = required
+            .iter()
+            .find(|path| path.starts_with(license_prefix.as_str()))
+        {
+            return Err(ValidationError::new(
+                "thirdPartyLicensesRef",
+                format!("must be a dedicated license directory, not a parent of '{required}'"),
+            ));
+        }
         if !listed
             .iter()
             .any(|path| path.starts_with(license_prefix.as_str()))
@@ -334,6 +349,20 @@ mod tests {
                 .cmp(right.path.as_str().as_bytes())
         });
         assert!(similar_prefix.validate().is_err());
+    }
+
+    #[test]
+    fn license_directory_must_not_be_a_required_parent() {
+        let mut value = manifest();
+        value.third_party_licenses_ref = RelativeRef::new("bin").expect("ref");
+        assert!(value.validate().is_err());
+    }
+
+    #[test]
+    fn tool_license_profile_must_be_lgpl() {
+        let mut value = manifest();
+        value.tools[0].license_profile = LicenseExpression::new("GPL-3.0-only").expect("license");
+        assert!(value.validate().is_err());
     }
 
     #[test]

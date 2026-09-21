@@ -66,7 +66,7 @@
 
 ### 第二轮 Eng Review（2026-09-21）
 
-范围：T1–T5 工作树改动（doctor/staging 链接边界、失败 stage、许可证引用闭合、文档状态、Windows staging 测试与 CI step）。结论：**CLEAN**（实现、契约、本地门禁与 Windows CI）；Windows staging/junction/symlink 与 reparse 用例已由 PR #28 的 Windows checks 实测通过，无静默跳过。
+范围：T1–T5 工作树改动 + 合并后 P1 实现全量复核。T1–T5 修复项维持 CLEAN（Windows staging/junction/symlink 与 reparse 用例已由 PR #28 的 Windows checks 实测通过，无静默跳过）；完整实现审查新发现 3×P1、16×P2（第二轮结论 `DONE_WITH_CONCERNS`），随后在 `sc-p1-eng-review-fixes` 分支全部修复并补回归，复核为 CLEAN。详见 [p1-eng-review.md](../architecture/repositories/scene-core/p1-eng-review.md)。
 
 | 项 | 证据 | 判定 |
 |---|---|---|
@@ -88,7 +88,7 @@
 
 1. ~~真实/公开脱敏样本、预览期望图与播放器点击对照~~ 已完成，见 [manual-verification.md](../acceptance/manual-verification.md) 与 [real-media-acceptance.md](../acceptance/real-media-acceptance.md)。
 2. 并发/多请求下的峰值内存与磁盘配额：单请求与 20 GiB 已实测（567 MiB/s、峰值 152 MiB）；Host 侧准入、配额与 single-flight 契约已定义（[host-cache-contract](../specs/host-cache-contract.md) §6.1），Host 实现与实测待 P2。
-3. 聚焦 Eng Review：第一轮审查发现已修复并留证；第二轮复核（2026-09-21）结论 CLEAN，见上节与 [media-extension-review.md](../architecture/repositories/scene-core/media-extension-review.md) 报告；Windows 运行时条件测试已在 PR #28 的 Windows checks 中通过（`listed_reparse_file_fails_bundle_files`、junction/symlink 用例均 ok）。
+3. 聚焦 Eng Review：第一轮审查发现已修复并留证；第二轮复核（2026-09-21）新发现 3×P1、16×P2，已在 `sc-p1-eng-review-fixes` 分支全部修复（含回归测试与 Windows 交叉编译），复核 CLEAN，见 [p1-eng-review.md](../architecture/repositories/scene-core/p1-eng-review.md) 与 [media-extension-review.md](../architecture/repositories/scene-core/media-extension-review.md) 报告。
 4. ~~Windows sidecar 内的 `run` 端到端实测~~ 已在干净 Windows 上以 bundle artifact 跑通 probe/extract_preview 与负向矩阵。
 
 ## 完成定义

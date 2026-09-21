@@ -5,7 +5,7 @@
 //! non-zero exit code derived from the first failed check.
 
 use crate::error::{ErrorCode, ValidationError, validate_safe_text};
-use crate::identity::{EngineIdentity, ToolchainIdentity, validate_target, validate_unique};
+use crate::identity::{EngineIdentity, ToolchainIdentity, validate_target};
 use crate::operation::Operation;
 use crate::values::{
     CacheCompatibilityId, CommitHash, DescriptorVersion, DoctorCheckName, ProtocolVersion,
@@ -174,6 +174,20 @@ impl DoctorCheck {
     }
 }
 
+/// The ten `doctor` check names in their frozen report order (spec §10).
+pub const DOCTOR_CHECK_NAMES: [&str; 10] = [
+    "package-manifest",
+    "manifest-trust-anchor",
+    "toolchain-descriptor",
+    "bundle-files",
+    "engine-executable",
+    "engine-version",
+    "tool-executables",
+    "tool-versions",
+    "capabilities",
+    "temp-dir",
+];
+
 /// `doctor --json` output with ordered, stable checks.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -201,11 +215,19 @@ impl DoctorOutput {
         if self.checks.is_empty() {
             return Err(ValidationError::new("checks", "must not be empty"));
         }
-        validate_unique(
-            "checks[].name",
-            self.checks.iter().map(|check| check.name.as_str()),
-        )?;
-        for check in &self.checks {
+        for (position, check) in self.checks.iter().enumerate() {
+            let Some(expected) = DOCTOR_CHECK_NAMES.get(position) else {
+                return Err(ValidationError::new(
+                    "checks",
+                    "must not contain checks beyond the registered ten",
+                ));
+            };
+            if check.name.as_str() != *expected {
+                return Err(ValidationError::new(
+                    format!("checks[{position}].name"),
+                    format!("must be '{expected}' in the frozen doctor order"),
+                ));
+            }
             check.validate()?;
         }
         let any_failed = self
@@ -336,6 +358,23 @@ mod tests {
         assert!(mismatched.validate().is_err());
     }
 
+    fn ok_checks_through(position: usize) -> Vec<DoctorCheck> {
+        DOCTOR_CHECK_NAMES[..position]
+            .iter()
+            .map(|name| DoctorCheck::ok(check_name(name), "ok"))
+            .collect()
+    }
+
+    fn output_with(checks: Vec<DoctorCheck>, status: DoctorStatus) -> DoctorOutput {
+        DoctorOutput {
+            schema_version: DescriptorVersion::current(),
+            status,
+            engine: engine(),
+            toolchain: Some(toolchain()),
+            checks,
+        }
+    }
+
     #[test]
     fn failed_checks_require_code_and_next_step() {
         let failed = DoctorCheck::failed(
@@ -344,13 +383,9 @@ mod tests {
             "a listed file does not match its recorded hash",
             "restore the file from the trusted release archive",
         );
-        let output = DoctorOutput {
-            schema_version: DescriptorVersion::current(),
-            status: DoctorStatus::Failed,
-            engine: engine(),
-            toolchain: Some(toolchain()),
-            checks: vec![failed.clone()],
-        };
+        let mut checks = ok_checks_through(3);
+        checks.push(failed.clone());
+        let output = output_with(checks, DoctorStatus::Failed);
         assert!(output.validate().is_ok());
         assert_eq!(output.exit_code(), 2);
 
@@ -362,19 +397,44 @@ mod tests {
         missing_code.code = None;
         assert!(missing_code.validate().is_err());
 
-        let temp_dir = DoctorOutput {
-            schema_version: DescriptorVersion::current(),
-            status: DoctorStatus::Failed,
-            engine: engine(),
-            toolchain: Some(toolchain()),
-            checks: vec![DoctorCheck::failed(
-                check_name("temp-dir"),
-                DoctorCheckCode::TempDirUnavailable,
-                "the temporary directory could not be created",
-                "check free space and directory permissions",
-            )],
-        };
-        assert_eq!(temp_dir.exit_code(), 3);
+        let mut checks = ok_checks_through(9);
+        checks.push(DoctorCheck::failed(
+            check_name("temp-dir"),
+            DoctorCheckCode::TempDirUnavailable,
+            "the temporary directory could not be created",
+            "check free space and directory permissions",
+        ));
+        assert_eq!(output_with(checks, DoctorStatus::Failed).exit_code(), 3);
+    }
+
+    #[test]
+    fn doctor_checks_must_follow_the_frozen_order() {
+        let mut reordered = ok_checks_through(1);
+        reordered.push(DoctorCheck::ok(check_name("bundle-files"), "ok"));
+        assert!(output_with(reordered, DoctorStatus::Ok).validate().is_err());
+
+        let renamed = output_with(
+            vec![DoctorCheck::ok(check_name("manifest-trust-anchor"), "ok")],
+            DoctorStatus::Ok,
+        );
+        assert!(renamed.validate().is_err());
+
+        let mut extended = ok_checks_through(10);
+        extended.push(DoctorCheck::ok(check_name("package-manifest"), "ok"));
+        assert!(output_with(extended, DoctorStatus::Ok).validate().is_err());
+
+        let mut ordered_failure = ok_checks_through(1);
+        ordered_failure.push(DoctorCheck::failed(
+            check_name("manifest-trust-anchor"),
+            DoctorCheckCode::TrustAnchorMissing,
+            "missing",
+            "provide the trusted digest",
+        ));
+        assert!(
+            output_with(ordered_failure, DoctorStatus::Failed)
+                .validate()
+                .is_ok()
+        );
     }
 
     #[test]

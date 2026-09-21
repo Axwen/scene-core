@@ -127,6 +127,43 @@ fn normalized_media_schema_encodes_time_sign_rules() {
 }
 
 #[test]
+fn wire_schemas_encode_the_validator_constraints() {
+    // The schemas are what consumers validate against, so the string classes
+    // must carry the same restrictions as the Rust validators. The patterns
+    // are ECMA-262 (lookaheads included); the drift gate keeps them in sync
+    // with the generated schemas.
+    let manifest = schema_value::<ArtifactManifest>();
+    let defs = manifest.get("$defs").expect("$defs");
+    let relative = serde_json::to_value(&defs["RelativeRef"]).expect("ref schema serializes");
+    let pattern = relative["pattern"].as_str().expect("relative ref pattern");
+    for fragment in [
+        "(?!/)",
+        "(?!.*//)",
+        "(?!.*/$)",
+        "(^|/)\\.\\.?(/|$)",
+        "[^\\\\:",
+    ] {
+        assert!(
+            pattern.contains(fragment),
+            "missing {fragment} in {pattern}"
+        );
+    }
+    assert_eq!(relative["maxLength"], serde_json::json!(1024));
+
+    let media_type = serde_json::to_value(&defs["MediaType"]).expect("media type schema");
+    assert_eq!(
+        media_type["pattern"],
+        serde_json::json!("^[a-z0-9.+_-]+/[a-z0-9.+_-]+$")
+    );
+    assert_eq!(media_type["maxLength"], serde_json::json!(128));
+
+    let start = schema_value::<scene_core_protocol::StartRequest>();
+    let deadline = &start["properties"]["deadlineMs"];
+    assert_eq!(deadline["minimum"], serde_json::json!(1));
+    assert_eq!(deadline["maximum"], serde_json::json!(600_000));
+}
+
+#[test]
 fn request_artifact_times_are_non_negative() {
     let manifest = schema_value::<ArtifactManifest>();
     let defs = manifest.get("$defs").expect("$defs");

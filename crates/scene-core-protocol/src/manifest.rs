@@ -226,6 +226,21 @@ impl Artifact {
                 "must be known for a preview frame",
             ));
         }
+        match slot.role {
+            ArtifactRole::Opening if self.requested_time_ms != 0 => {
+                return Err(ValidationError::new(
+                    format!("{path}.requestedTimeMs"),
+                    "must be 0 for the opening preview",
+                ));
+            }
+            ArtifactRole::Midpoint if self.requested_time_ms == 0 => {
+                return Err(ValidationError::new(
+                    format!("{path}.requestedTimeMs"),
+                    "must be positive for the midpoint preview",
+                ));
+            }
+            _ => {}
+        }
         Ok(())
     }
 }

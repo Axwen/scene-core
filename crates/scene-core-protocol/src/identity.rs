@@ -84,6 +84,26 @@ pub struct ToolchainDescriptor {
     pub shared_libraries: Vec<ToolchainLibrary>,
 }
 
+/// Known GPL-only / nonfree FFmpeg configure switches. This is a fast-fail
+/// list, not the authoritative gate: the toolchain lock (`gplComponents:
+/// false`) and the SBOM remain responsible for the full component inventory.
+const GPL_ONLY_CONFIGURE_FLAGS: [&str; 14] = [
+    "--enable-gpl",
+    "--enable-nonfree",
+    "--enable-libx264",
+    "--enable-libx265",
+    "--enable-libxvid",
+    "--enable-libxavs",
+    "--enable-libxavs2",
+    "--enable-libdavs2",
+    "--enable-libcdio",
+    "--enable-libmodplug",
+    "--enable-frei0r",
+    "--enable-librubberband",
+    "--enable-libvidstab",
+    "--enable-libsmbclient",
+];
+
 impl ToolchainDescriptor {
     pub fn validate(&self) -> Result<(), ValidationError> {
         validate_target("target", &self.target)?;
@@ -102,10 +122,10 @@ impl ToolchainDescriptor {
                     "every entry must be a --flag",
                 ));
             }
-            if matches!(flag.as_str(), "--enable-gpl" | "--enable-nonfree") {
+            if GPL_ONLY_CONFIGURE_FLAGS.contains(&flag.as_str()) {
                 return Err(ValidationError::new(
                     "configureFlags",
-                    "the lgpl distribution profile forbids --enable-gpl and --enable-nonfree",
+                    "the lgpl distribution profile forbids GPL and nonfree components",
                 ));
             }
         }
@@ -276,6 +296,15 @@ mod tests {
         let mut bad_flag = descriptor();
         bad_flag.configure_flags = vec!["enable-shared".to_owned()];
         assert!(bad_flag.validate().is_err());
+
+        for component in ["--enable-libx264", "--enable-libx265", "--enable-frei0r"] {
+            let mut gpl_component = descriptor();
+            gpl_component.configure_flags.push(component.to_owned());
+            assert!(
+                gpl_component.validate().is_err(),
+                "{component} was accepted"
+            );
+        }
     }
 
     #[test]

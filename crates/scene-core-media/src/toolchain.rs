@@ -11,6 +11,7 @@ pub const FFPROBE: &str = "ffprobe";
 pub enum ToolchainError {
     EnvironmentMissing,
     Missing { name: &'static str, path: PathBuf },
+    NotAbsolute(PathBuf),
 }
 
 impl fmt::Display for ToolchainError {
@@ -23,6 +24,11 @@ impl fmt::Display for ToolchainError {
             ToolchainError::Missing { name, path } => {
                 write!(formatter, "{name} is missing at {}", path.display())
             }
+            ToolchainError::NotAbsolute(path) => write!(
+                formatter,
+                "the toolchain bin directory must be absolute: {}",
+                path.display()
+            ),
         }
     }
 }
@@ -39,6 +45,9 @@ pub struct Toolchain {
 impl Toolchain {
     pub fn from_bin_dir(bin_dir: impl Into<PathBuf>) -> Result<Self, ToolchainError> {
         let bin_dir = bin_dir.into();
+        if !bin_dir.is_absolute() {
+            return Err(ToolchainError::NotAbsolute(bin_dir));
+        }
         let toolchain = Self { bin_dir };
         for (name, path) in [(FFMPEG, toolchain.ffmpeg()), (FFPROBE, toolchain.ffprobe())] {
             if !path.is_file() {
@@ -89,5 +98,13 @@ mod tests {
         let error = Toolchain::from_bin_dir(&dir).expect_err("empty dir has no tools");
         assert!(matches!(error, ToolchainError::Missing { .. }));
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn relative_bin_dirs_are_rejected() {
+        for relative in ["", "ffmpeg", "tools/bin", "./tools"] {
+            let error = Toolchain::from_bin_dir(relative).expect_err("relative dir");
+            assert!(matches!(error, ToolchainError::NotAbsolute(_)));
+        }
     }
 }

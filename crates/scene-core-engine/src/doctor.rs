@@ -1,10 +1,10 @@
 //! Bundle doctor: ordered integrity checks that stop at the first failure.
 
-use crate::identity::{engine_identity, read_toolchain_identity};
+use crate::identity::{engine_identity, read_toolchain_descriptor};
 use crate::runner::CommandRunner;
 use scene_core_protocol::{
     DescriptorVersion, DoctorCheck, DoctorCheckCode, DoctorCheckName, DoctorOutput, DoctorStatus,
-    PackageManifest, Sha256Digest, ToolchainIdentity,
+    PackageManifest, Sha256Digest, ToolchainDescriptor, ToolchainIdentity,
 };
 use std::collections::BTreeSet;
 use std::fs;
@@ -83,13 +83,25 @@ pub fn run_doctor(request: DoctorRequest<'_>) -> DoctorOutput {
         }
     }
 
-    match read_toolchain_identity(request.bundle_root) {
-        Ok(identity) => {
+    match read_toolchain_descriptor(
+        request.bundle_root,
+        manifest.toolchain_descriptor_ref.as_str(),
+    ) {
+        Ok((descriptor, fingerprint)) => {
+            let identity = descriptor.to_identity(fingerprint);
             if identity.toolchain_fingerprint != manifest.toolchain_fingerprint {
                 checks.push(failure(
                     "toolchain-descriptor",
                     DoctorCheckCode::ToolchainDescriptorInvalid,
                     "the toolchain descriptor does not match the package manifest fingerprint",
+                ));
+                return finish(engine, toolchain, checks);
+            }
+            if let Err(reason) = check_shared_library_closure(&descriptor, &manifest) {
+                checks.push(failure(
+                    "toolchain-descriptor",
+                    DoctorCheckCode::ToolchainDescriptorInvalid,
+                    &reason,
                 ));
                 return finish(engine, toolchain, checks);
             }
@@ -284,6 +296,29 @@ fn next_step(code: DoctorCheckCode) -> &'static str {
     }
 }
 
+/// The descriptor's dynamic library closure must be the same set of files the
+/// package manifest records, with identical hashes.
+fn check_shared_library_closure(
+    descriptor: &ToolchainDescriptor,
+    manifest: &PackageManifest,
+) -> Result<(), String> {
+    for library in &descriptor.shared_libraries {
+        let Some(listed) = manifest.file(library.path.as_str()) else {
+            return Err(format!(
+                "the toolchain descriptor lists '{}', which the package manifest does not",
+                library.path.as_str()
+            ));
+        };
+        if listed.sha256 != library.sha256 {
+            return Err(format!(
+                "the toolchain descriptor hash for '{}' does not match the package manifest",
+                library.path.as_str()
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn check_bundle_files(root: &Path, manifest: &PackageManifest) -> Result<(), DoctorCheck> {
     for file in &manifest.files {
         let path = root.join(file.path.as_str());
@@ -296,21 +331,30 @@ fn check_bundle_files(root: &Path, manifest: &PackageManifest) -> Result<(), Doc
                 ));
             }
         }
-        let bytes = fs::read(&path).map_err(|_| {
+        // Compare the recorded size before reading anything, so a tampered
+        // bundle cannot make doctor allocate an unbounded file.
+        let byte_size = fs::metadata(&path).map_err(|_| {
             failure(
                 "bundle-files",
                 DoctorCheckCode::BundleFileInvalid,
                 "a listed bundle file is missing",
             )
         })?;
-        if bytes.len() as u64 != file.byte_size {
+        if byte_size.len() != file.byte_size {
             return Err(failure(
                 "bundle-files",
                 DoctorCheckCode::BundleFileInvalid,
                 "a listed bundle file does not match its recorded size",
             ));
         }
-        if Sha256Digest::from_bytes(&bytes) != file.sha256 {
+        let digest = scene_core_media::hash::hash_file(&path).map_err(|_| {
+            failure(
+                "bundle-files",
+                DoctorCheckCode::BundleFileInvalid,
+                "a listed bundle file could not be hashed",
+            )
+        })?;
+        if digest != file.sha256 {
             return Err(failure(
                 "bundle-files",
                 DoctorCheckCode::BundleFileInvalid,

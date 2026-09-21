@@ -135,7 +135,8 @@
       "type": "string"
     },
     "MediaType": {
-      "pattern": "^[a-z0-9.+-_]+/[a-z0-9.+-_]+$",
+      "maxLength": 128,
+      "pattern": "^[a-z0-9.+_-]+/[a-z0-9.+_-]+$",
       "type": "string"
     },
     "Operation": {
@@ -157,6 +158,7 @@
     "RelativeRef": {
       "maxLength": 1024,
       "minLength": 1,
+      "pattern": "^(?!/)(?!.*//)(?!.*/$)(?!.*(^|/)\\.\\.?(/|$))[^\\\\:\\u0000-\\u001f\\u007f]+$",
       "type": "string"
     },
     "Sha256Digest": {

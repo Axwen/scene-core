@@ -85,7 +85,7 @@ fn media_baselines() {
     for _ in 0..10 {
         let _ = std::fs::remove_file(&output);
         let started = Instant::now();
-        generate(&toolchain, &media, 0, &output, None).expect("preview");
+        generate(&toolchain, &media, 0, 0, &output, None).expect("preview");
         preview_times.push(started.elapsed().as_micros());
     }
     let preview_bytes = std::fs::metadata(&output).expect("metadata").len();
@@ -183,7 +183,7 @@ fn performance_smoke_gate() {
     for _ in 0..10 {
         let _ = std::fs::remove_file(&output);
         let started = Instant::now();
-        generate(&toolchain, &media, 0, &output, None).expect("preview");
+        generate(&toolchain, &media, 0, 0, &output, None).expect("preview");
         preview_times.push(started.elapsed().as_micros());
     }
 
