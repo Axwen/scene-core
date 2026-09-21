@@ -218,9 +218,16 @@ fn performance_smoke_gate() {
     );
     let audio_output = dir.join("gate-audio.wav");
     let started = Instant::now();
-    let audio_info =
-        scene_core_media::audio::extract(&toolchain, &audio_media, 0, &audio_output, None)
-            .expect("audio extraction");
+    let audio_info = scene_core_media::audio::extract(
+        &toolchain,
+        &audio_media,
+        0,
+        0,
+        &scene_core_media::audio::AudioTrim::default(),
+        &audio_output,
+        None,
+    )
+    .expect("audio extraction");
     let audio_elapsed = started.elapsed().as_secs_f64();
     let audio_realtime = audio_seconds as f64 / audio_elapsed;
     let min_audio_realtime = limit("SCENE_CORE_PERF_MIN_AUDIO_REALTIME", 10.0);

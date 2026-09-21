@@ -355,22 +355,28 @@ impl Artifact {
                 "must be positive for an audio artifact",
             ));
         }
-        if self.requested_time_ms != 0 {
-            return Err(ValidationError::new(
-                format!("{path}.requestedTimeMs"),
-                "must be 0: the audio operation has no trim window in Protocol 0.1",
-            ));
-        }
-        if self.presentation_time_ms.is_none() {
+        let Some(presentation_time_ms) = self.presentation_time_ms else {
             return Err(ValidationError::new(
                 format!("{path}.presentationTimeMs"),
                 "must carry the material time of the first output sample",
             ));
+        };
+        if presentation_time_ms < self.requested_time_ms {
+            return Err(ValidationError::new(
+                format!("{path}.presentationTimeMs"),
+                "must not precede requestedTimeMs",
+            ));
         }
-        if self.audio_pcm.is_none() {
+        let Some(audio) = &self.audio_pcm else {
             return Err(ValidationError::new(
                 format!("{path}.audioPcm"),
                 "must carry sampleRate, channels and sampleCount",
+            ));
+        };
+        if audio.sample_count == 0 {
+            return Err(ValidationError::new(
+                format!("{path}.audioPcm.sampleCount"),
+                "must be positive: an empty window is not publishable",
             ));
         }
         if self.pixel_width.is_some() || self.pixel_height.is_some() {

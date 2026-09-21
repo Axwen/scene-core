@@ -161,7 +161,7 @@ impl MediaBackend for FakeBackend {
         &self,
         _staging: &StagingRoot,
         control: &RunControl,
-        _audio_stream_index: Option<u32>,
+        _options: Option<&scene_core_protocol::AudioPcmOptions>,
     ) -> Result<scene_core_engine::run::AudioPcmOutcome, MediaFailure> {
         match self.mode {
             Mode::Cancel => {
@@ -1135,15 +1135,25 @@ fn audio_request(
     audio_stream_index: Option<u32>,
     deadline_ms: u64,
 ) -> StartRequest {
-    let mut request = live_request(Operation::ExtractAudioPcm, staging, deadline_ms);
-    request.options = match audio_stream_index {
+    let options = match audio_stream_index {
         Some(index) => scene_core_protocol::OperationOptions::ExtractAudioPcm(
             scene_core_protocol::AudioPcmOptions {
                 audio_stream_index: Some(index),
+                ..scene_core_protocol::AudioPcmOptions::default()
             },
         ),
         None => scene_core_protocol::OperationOptions::default(),
     };
+    audio_request_with(staging, options, deadline_ms)
+}
+
+fn audio_request_with(
+    staging: &Path,
+    options: scene_core_protocol::OperationOptions,
+    deadline_ms: u64,
+) -> StartRequest {
+    let mut request = live_request(Operation::ExtractAudioPcm, staging, deadline_ms);
+    request.options = options;
     request.operation_config_hash = scene_core_protocol::canonical_sha256(
         &serde_json::to_value(request.options).expect("options"),
     )
@@ -1381,5 +1391,142 @@ fn unwritable_audio_output_reports_resource_limit() {
         .permissions();
     std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o755);
     std::fs::set_permissions(&audio_dir, permissions).expect("restore");
+    let _ = std::fs::remove_dir_all(&staging);
+}
+
+fn stage_step_audio(bin_dir: &str, staging: &Path) {
+    stage_media_with_ffmpeg(
+        bin_dir,
+        staging,
+        &[
+            "-f",
+            "lavfi",
+            "-i",
+            "aevalsrc=0.5*gte(t\\,0.5):s=48000:d=1.5",
+            "-ac",
+            "2",
+            "-c:a",
+            "pcm_s16le",
+            "-f",
+            "matroska",
+        ],
+    );
+}
+
+#[test]
+fn audio_trim_and_resample_reports_the_window() {
+    let Ok(bin_dir) = std::env::var(scene_core_media::toolchain::ENV_FFMPEG_DIR) else {
+        eprintln!("skipping: SCENE_CORE_FFMPEG_DIR is not set");
+        return;
+    };
+    let staging =
+        std::env::temp_dir().join(format!("scene-core-audio-trim-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&staging);
+    stage_step_audio(&bin_dir, &staging);
+    let options = scene_core_protocol::OperationOptions::ExtractAudioPcm(
+        scene_core_protocol::AudioPcmOptions {
+            start_ms: Some(400),
+            end_ms: Some(700),
+            sample_rate: Some(16_000),
+            channels: Some(1),
+            ..scene_core_protocol::AudioPcmOptions::default()
+        },
+    );
+    let request = audio_request_with(&staging, options, 60_000);
+    let (exit_code, events) = run_audio_session(&bin_dir, &staging, &request);
+    assert_eq!(exit_code, 0);
+    let artifact = audio_artifact_of(&events);
+    assert_eq!(artifact.requested_time_ms, 400);
+    assert_eq!(artifact.presentation_time_ms, Some(400));
+    let mapping = artifact.audio_pcm.expect("audio mapping");
+    assert_eq!(mapping.sample_rate, 16_000);
+    assert_eq!(mapping.channels, 1);
+    assert_eq!(mapping.sample_count, 4_800);
+    // The step at material 500ms must map back through the reported window.
+    let onset = first_loud_frame(&staging.join("output/audio/track.wav"), mapping.channels);
+    let material_onset_ms = artifact.presentation_time_ms.expect("start")
+        + onset * 1000 / u64::from(mapping.sample_rate);
+    assert!(
+        material_onset_ms.abs_diff(500) <= 1,
+        "step mapped to {material_onset_ms}ms instead of 500ms"
+    );
+    let _ = std::fs::remove_dir_all(&staging);
+}
+
+#[test]
+fn audio_trim_start_beyond_the_track_fails() {
+    let Ok(bin_dir) = std::env::var(scene_core_media::toolchain::ENV_FFMPEG_DIR) else {
+        eprintln!("skipping: SCENE_CORE_FFMPEG_DIR is not set");
+        return;
+    };
+    let staging =
+        std::env::temp_dir().join(format!("scene-core-audio-empty-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&staging);
+    stage_step_audio(&bin_dir, &staging);
+    let options = scene_core_protocol::OperationOptions::ExtractAudioPcm(
+        scene_core_protocol::AudioPcmOptions {
+            start_ms: Some(5_000),
+            ..scene_core_protocol::AudioPcmOptions::default()
+        },
+    );
+    let request = audio_request_with(&staging, options, 60_000);
+    let (exit_code, events) = run_audio_session(&bin_dir, &staging, &request);
+    assert_eq!(exit_code, 3);
+    let terminal = events.last().expect("terminal");
+    assert_eq!(terminal.event_type, EventType::Failed);
+    let error = terminal.error.as_ref().expect("error");
+    assert_eq!(error.code, ErrorCode::UnsupportedInput);
+    assert!(!staging.join("output/audio/track.wav").exists());
+    let _ = std::fs::remove_dir_all(&staging);
+}
+
+fn stage_long_audio(bin_dir: &str, staging: &Path) {
+    stage_media_with_ffmpeg(
+        bin_dir,
+        staging,
+        &[
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=10:sample_rate=48000",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "128k",
+            "-f",
+            "mp4",
+        ],
+    );
+}
+
+#[test]
+fn audio_trim_window_matches_the_requested_duration() {
+    let Ok(bin_dir) = std::env::var(scene_core_media::toolchain::ENV_FFMPEG_DIR) else {
+        eprintln!("skipping: SCENE_CORE_FFMPEG_DIR is not set");
+        return;
+    };
+    let staging =
+        std::env::temp_dir().join(format!("scene-core-audio-window-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&staging);
+    stage_long_audio(&bin_dir, &staging);
+    let options = scene_core_protocol::OperationOptions::ExtractAudioPcm(
+        scene_core_protocol::AudioPcmOptions {
+            start_ms: Some(2_000),
+            end_ms: Some(4_000),
+            ..scene_core_protocol::AudioPcmOptions::default()
+        },
+    );
+    let request = audio_request_with(&staging, options, 60_000);
+    let (exit_code, events) = run_audio_session(&bin_dir, &staging, &request);
+    assert_eq!(exit_code, 0);
+    let artifact = audio_artifact_of(&events);
+    assert_eq!(artifact.requested_time_ms, 2_000);
+    assert_eq!(artifact.presentation_time_ms, Some(2_000));
+    let mapping = artifact.audio_pcm.expect("audio mapping");
+    assert!(
+        mapping.sample_count.abs_diff(96_000) <= 1_024,
+        "trimmed window decoded {} samples instead of ~96000",
+        mapping.sample_count
+    );
     let _ = std::fs::remove_dir_all(&staging);
 }

@@ -563,6 +563,7 @@ fn extract_audio_pcm_request_accepts_its_options() {
     request.output_contract_version = Operation::ExtractAudioPcm.output_contract_version();
     request.options = OperationOptions::ExtractAudioPcm(AudioPcmOptions {
         audio_stream_index: Some(1),
+        ..AudioPcmOptions::default()
     });
     let config_hash = canonical_sha256(&serde_json::json!({"audioStreamIndex": 1})).expect("hash");
     request.operation_config_hash = config_hash.clone();
@@ -586,6 +587,7 @@ fn extract_audio_pcm_request_accepts_its_options() {
     let mut other = request.clone();
     other.options = OperationOptions::ExtractAudioPcm(AudioPcmOptions {
         audio_stream_index: Some(2),
+        ..AudioPcmOptions::default()
     });
     other.operation_config_hash =
         canonical_sha256(&serde_json::json!({"audioStreamIndex": 2})).expect("hash");
@@ -601,6 +603,7 @@ fn audio_options_are_rejected_on_other_operations() {
     let mut request = probe_request();
     request.options = OperationOptions::ExtractAudioPcm(AudioPcmOptions {
         audio_stream_index: Some(1),
+        ..AudioPcmOptions::default()
     });
     let error = request.validate().expect_err("options mismatch");
     assert_eq!(error.code, ErrorCode::InvalidRequest);
@@ -620,7 +623,23 @@ fn audio_manifest_pins_its_slot_and_mapping_fields() {
 
     let mut trimmed = audio_manifest(vec![audio_artifact()]);
     trimmed.artifacts[0].requested_time_ms = 1_000;
-    assert!(trimmed.validate().is_err());
+    trimmed.artifacts[0].presentation_time_ms = Some(1_000);
+    assert!(trimmed.validate().is_ok());
+
+    let mut before_request = audio_manifest(vec![audio_artifact()]);
+    before_request.artifacts[0].requested_time_ms = 1_000;
+    assert!(
+        before_request.validate().is_err(),
+        "presentationTimeMs must not precede requestedTimeMs"
+    );
+
+    let mut empty_window = audio_manifest(vec![audio_artifact()]);
+    empty_window.artifacts[0].audio_pcm = Some(AudioPcmInfo {
+        sample_rate: 48_000,
+        channels: 2,
+        sample_count: 0,
+    });
+    assert!(empty_window.validate().is_err());
 
     let mut zero_rate = audio_manifest(vec![audio_artifact()]);
     zero_rate.artifacts[0].audio_pcm = Some(AudioPcmInfo {
