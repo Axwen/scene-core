@@ -322,6 +322,81 @@ fn progress_event_requires_non_negative_totals() {
 }
 
 #[test]
+fn progress_values_must_not_regress_or_exceed_total() {
+    let mut above_total = progress_event(2);
+    above_total.completed = Some(3);
+    assert!(above_total.validate().is_err());
+
+    let mut validator = EventStreamValidator::new();
+    validator.accept(&accepted_event()).expect("accepted");
+    validator.accept(&progress_event(2)).expect("progress");
+
+    let mut regressed = progress_event(3);
+    regressed.completed = Some(0);
+    assert!(validator.accept(&regressed).is_err());
+
+    let mut next_stage = progress_event(3);
+    next_stage.stage = Some(StageName::new("preview").expect("stage"));
+    next_stage.completed = Some(0);
+    validator.accept(&next_stage).expect("new stage resets");
+}
+
+fn completed_preview_event() -> EventEnvelope {
+    let request = probe_request();
+    let mut event = accepted_event();
+    event.operation = Operation::ExtractPreview;
+    event.derivation_key =
+        derivation_descriptor(request.input_fingerprint.clone(), Operation::ExtractPreview)
+            .derive_key()
+            .expect("key");
+    event.event_type = EventType::Completed;
+    event.sequence = 2;
+    event.result = Some(scene_core_protocol::OperationResult::ExtractPreview(
+        Box::new(ExtractPreviewResult {
+            media: minimal_media(),
+            artifact_manifest: manifest(vec![preview_artifact(), midpoint_artifact()]),
+            resource_usage: ResourceUsage {
+                wall_time_ms: 10,
+                cpu_time_ms: None,
+                peak_memory_bytes: None,
+            },
+        }),
+    ));
+    event
+}
+
+#[test]
+fn completed_manifest_must_echo_the_event_identity() {
+    let event = completed_preview_event();
+    assert!(event.validate().is_ok());
+
+    let tamper = |event: &EventEnvelope, position: usize| {
+        let mut changed = event.clone();
+        let scene_core_protocol::OperationResult::ExtractPreview(preview) =
+            changed.result.as_mut().expect("result")
+        else {
+            unreachable!("preview result")
+        };
+        match position {
+            0 => preview.artifact_manifest.request_id = Identifier::new("req_evil").expect("id"),
+            1 => {
+                preview.artifact_manifest.source_version_id =
+                    Identifier::new("sourcev_evil").expect("id")
+            }
+            2 => preview.artifact_manifest.input_fingerprint = sha(TOOLCHAIN_FINGERPRINT),
+            _ => preview.artifact_manifest.engine.engine_version = "9.9.9".to_owned(),
+        }
+        changed
+    };
+    for position in 0..4 {
+        assert!(
+            tamper(&event, position).validate().is_err(),
+            "tamper {position} was accepted"
+        );
+    }
+}
+
+#[test]
 fn unknown_event_types_are_rejected_by_strict_parse() {
     let line = serde_json::to_string(&accepted_event()).expect("serializes");
     let mutated = line.replacen("\"accepted\"", "\"segment_ready\"", 1);
@@ -461,6 +536,21 @@ fn manifest_requires_fixed_preview_order() {
         ])
         .validate()
         .is_err()
+    );
+}
+
+#[test]
+fn preview_requested_times_are_pinned_to_their_slots() {
+    let mut opening = preview_artifact();
+    opening.requested_time_ms = 12_345;
+    assert!(manifest(vec![opening]).validate().is_err());
+
+    let mut midpoint = midpoint_artifact();
+    midpoint.requested_time_ms = 0;
+    assert!(
+        manifest(vec![preview_artifact(), midpoint])
+            .validate()
+            .is_err()
     );
 }
 

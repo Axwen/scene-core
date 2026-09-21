@@ -129,6 +129,9 @@ impl EventEnvelope {
                         "progress carries no result or error",
                     ));
                 }
+                if self.completed > self.total {
+                    return Err(ValidationError::new("completed", "must not exceed total"));
+                }
             }
             EventType::Completed => {
                 let Some(result) = &self.result else {
@@ -150,6 +153,20 @@ impl EventEnvelope {
                     ));
                 }
                 result.validate()?;
+                if let OperationResult::ExtractPreview(preview) = result {
+                    let manifest = &preview.artifact_manifest;
+                    if manifest.request_id != self.request_id
+                        || manifest.source_version_id != self.source_version_id
+                        || manifest.input_fingerprint != self.input_fingerprint
+                        || manifest.derivation_key != self.derivation_key
+                        || manifest.engine != self.engine
+                    {
+                        return Err(ValidationError::new(
+                            "result.artifactManifest",
+                            "must echo the event's request, source, fingerprint, derivation and engine identity",
+                        ));
+                    }
+                }
             }
             EventType::Failed | EventType::Cancelled | EventType::TimedOut => {
                 if has_progress_values || self.result.is_some() {
@@ -230,6 +247,7 @@ pub struct EventStreamValidator {
     last_sequence: u64,
     accepted: bool,
     terminal: Option<EventType>,
+    last_progress: Option<(StageName, u64)>,
 }
 
 impl EventStreamValidator {
@@ -286,12 +304,31 @@ impl EventStreamValidator {
                 }
                 self.accepted = true;
             }
-            EventType::Running | EventType::Progress => {
+            EventType::Running => {
                 if !self.accepted {
                     return Err(ValidationError::new(
                         "eventType",
                         "requires a preceding accepted event",
                     ));
+                }
+            }
+            EventType::Progress => {
+                if !self.accepted {
+                    return Err(ValidationError::new(
+                        "eventType",
+                        "requires a preceding accepted event",
+                    ));
+                }
+                if let (Some(stage), Some(completed)) = (&event.stage, event.completed) {
+                    if let Some((last_stage, last_completed)) = &self.last_progress {
+                        if last_stage == stage && completed < *last_completed {
+                            return Err(ValidationError::new(
+                                "completed",
+                                "must not regress within the same stage",
+                            ));
+                        }
+                    }
+                    self.last_progress = Some((stage.clone(), completed));
                 }
             }
             EventType::Failed => {

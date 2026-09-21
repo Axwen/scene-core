@@ -49,6 +49,7 @@ pub struct StartRequest {
     pub derivation_key: Sha256Digest,
     pub execution_context: ExecutionContext,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(extend("minimum" = 1, "maximum" = 600_000))]
     pub deadline_ms: Option<u64>,
     pub options: OperationOptions,
 }
@@ -312,6 +313,12 @@ impl ControlStreamValidator {
                 self.request_id = Some(start.request_id.clone());
             }
             ControlMessage::Cancel(cancel) => {
+                if !cancel.engine_protocol_version.is_supported() {
+                    return Err(ValidationError::new(
+                        "engineProtocolVersion",
+                        "must be '0.1' in Protocol 0.1",
+                    ));
+                }
                 let Some(expected) = &self.request_id else {
                     return Err(ValidationError::new(
                         "messageType",
@@ -496,5 +503,19 @@ mod tests {
 
         let mut cancel_first = ControlStreamValidator::new();
         assert!(cancel_first.accept(&cancel).is_err());
+    }
+
+    #[test]
+    fn cancel_with_an_unsupported_version_is_rejected() {
+        let start = serde_json::to_string(&probe_request()).expect("serializes");
+        let mut validator = ControlStreamValidator::new();
+        validator
+            .accept(&parse_control_line(&start).expect("start"))
+            .expect("start accepted");
+        let unsupported =
+            r#"{"engineProtocolVersion":"0.9","messageType":"cancel","requestId":"req_01"}"#;
+        let message = parse_control_line(unsupported).expect("cancel parses");
+        assert!(validator.accept(&message).is_err());
+        assert!(!validator.is_cancelled());
     }
 }

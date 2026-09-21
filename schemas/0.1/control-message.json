@@ -138,7 +138,8 @@
       "properties": {
         "deadlineMs": {
           "format": "uint64",
-          "minimum": 0,
+          "maximum": 600000,
+          "minimum": 1,
           "type": [
             "integer",
             "null"

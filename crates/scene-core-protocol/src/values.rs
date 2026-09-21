@@ -663,7 +663,8 @@ string_schema!(
 );
 string_schema!(
     RelativeRef,
-    {"type": "string", "minLength": 1, "maxLength": 1024}
+    {"type": "string", "minLength": 1, "maxLength": 1024,
+     "pattern": "^(?!/)(?!.*//)(?!.*/$)(?!.*(^|/)\\.\\.?(/|$))[^\\\\:\\u0000-\\u001f\\u007f]+$"}
 );
 string_schema!(InputRef, {"type": "string", "const": "input/source.media"});
 string_schema!(
@@ -672,7 +673,7 @@ string_schema!(
 );
 string_schema!(
     MediaType,
-    {"type": "string", "pattern": "^[a-z0-9.+-_]+/[a-z0-9.+-_]+$"}
+    {"type": "string", "maxLength": 128, "pattern": "^[a-z0-9.+_-]+/[a-z0-9.+_-]+$"}
 );
 string_schema!(
     StageName,
