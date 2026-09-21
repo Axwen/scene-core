@@ -70,7 +70,7 @@ Artifact（恰好一个）：
 
 | 场景 | 码 | 终态/退出码 |
 |---|---|---|
-| 无可用音频流 | `MISSING_AUDIO_STREAM`（新增，非可重试） | `failed` / 2 |
+| 无可用音频流 | `MISSING_AUDIO_STREAM`（新增，非可重试，与 `MISSING_VIDEO_STREAM` 同类） | `failed` / 3 |
 | 不可靠时间轴、无法验证映射 | `UNSUPPORTED_INPUT` | `failed` / 3 |
 | 输出预算超限、磁盘不足 | `RESOURCE_LIMIT` | `failed` / 3 |
 | 工具缺失/失败、取消、超时 | 沿用现有码与 stage 规则 | 不变 |

@@ -19,6 +19,13 @@
 3. `version --json` 输出三项 implementedOperations；doctor 合成 bundle 用例通过；bundle 冒烟在 Windows CI 通过。
 4. 既有 probe/preview 合同与 run 合同不回归。
 
+## 实现状态（2026-09-21）
+
+- `MediaBackend::extract_audio_pcm`（真实/Unavailable/测试假后端）；`run_session` 进度 `audio` 0/1、Manifest 组装与身份回传、失败 stage `audio`。
+- 流选择（显式 index 或最低非附件音频流）、容器原点与流起点未知 → `UNSUPPORTED_INPUT`、输出预算预检、时长粗差拒绝、`presentationTimeMs = max(stream.startTimeMs, 0)`。
+- `implemented_operations()` 三项；`version --json`、doctor 与 `bundle-smoke.ps1` 白名单同步。
+- 测试：`run_contract` 22 项全绿，新增音频映射、正起点、显式选择、`MISSING_AUDIO_STREAM`（exit 3）四项。
+
 ## 依赖
 
 SC-P2-01、SC-P2-02。
