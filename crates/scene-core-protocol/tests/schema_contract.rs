@@ -164,6 +164,45 @@ fn wire_schemas_encode_the_validator_constraints() {
 }
 
 #[test]
+fn audio_bounds_in_schemas_match_the_validators() {
+    let control = schema_value::<ControlMessageSchema>();
+    let defs = control.get("$defs").expect("$defs");
+    let options = serde_json::to_value(&defs["AudioPcmOptions"]).expect("options schema");
+    let sample_rate = &options["properties"]["sampleRate"];
+    assert_eq!(sample_rate["minimum"], serde_json::json!(8_000));
+    assert_eq!(sample_rate["maximum"], serde_json::json!(192_000));
+    let channels = &options["properties"]["channels"];
+    assert_eq!(channels["minimum"], serde_json::json!(1));
+    assert_eq!(channels["maximum"], serde_json::json!(2));
+    // The parser accepts an explicit null for every optional option, so the
+    // schema must keep advertising the nullable shape.
+    for field in [
+        "audioStreamIndex",
+        "startMs",
+        "endMs",
+        "sampleRate",
+        "channels",
+    ] {
+        assert_eq!(
+            options["properties"][field]["type"],
+            serde_json::json!(["integer", "null"]),
+            "{field} must stay nullable to match the parser"
+        );
+    }
+
+    let manifest = schema_value::<ArtifactManifest>();
+    let defs = manifest.get("$defs").expect("$defs");
+    let audio = serde_json::to_value(&defs["AudioPcmInfo"]).expect("audio pcm schema");
+    for field in ["sampleRate", "channels", "sampleCount"] {
+        assert_eq!(
+            audio["properties"][field]["minimum"],
+            serde_json::json!(1),
+            "{field} must be positive in the public Schema"
+        );
+    }
+}
+
+#[test]
 fn request_artifact_times_are_non_negative() {
     let manifest = schema_value::<ArtifactManifest>();
     let defs = manifest.get("$defs").expect("$defs");

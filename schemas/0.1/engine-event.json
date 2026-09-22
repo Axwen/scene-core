@@ -157,17 +157,17 @@
       "properties": {
         "channels": {
           "format": "uint32",
-          "minimum": 0,
+          "minimum": 1,
           "type": "integer"
         },
         "sampleCount": {
           "format": "uint64",
-          "minimum": 0,
+          "minimum": 1,
           "type": "integer"
         },
         "sampleRate": {
           "format": "uint32",
-          "minimum": 0,
+          "minimum": 1,
           "type": "integer"
         }
       },

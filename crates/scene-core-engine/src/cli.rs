@@ -2,7 +2,7 @@
 
 use crate::doctor::{DoctorRequest, run_doctor};
 use crate::identity::{engine_identity, read_toolchain_identity, resolve_bundle_root};
-use crate::run::{self, ProbeBackend, RunControl};
+use crate::run::{self, FfmpegBackend, RunControl};
 use crate::runner::RealCommandRunner;
 use scene_core_media::staging::StagingRoot;
 use scene_core_media::toolchain::Toolchain;
@@ -198,7 +198,7 @@ fn run_run_command(args: &[String]) -> Result<CliOutput, CliErrorOutput> {
     }
 
     let backend: Box<dyn run::MediaBackend> = match resolve_toolchain_binaries() {
-        Ok(toolchain) => Box::new(ProbeBackend { toolchain }),
+        Ok(toolchain) => Box::new(FfmpegBackend { toolchain }),
         Err(_) => Box::new(run::UnavailableBackend),
     };
     let validation = match &toolchain_fingerprint {

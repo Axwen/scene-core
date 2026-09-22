@@ -46,7 +46,10 @@ pub use input::{
 };
 pub use manifest::{Artifact, ArtifactKind, ArtifactManifest, ArtifactRole, AudioPcmInfo};
 pub use media::{ContainerInfo, MediaStream, NormalizedMedia, StreamKind};
-pub use operation::{AudioPcmOptions, EmptyOptions, Operation, OperationOptions};
+pub use operation::{
+    AudioPcmOptions, EmptyOptions, MAX_AUDIO_CHANNELS, MAX_AUDIO_SAMPLE_RATE, Operation,
+    OperationOptions,
+};
 pub use package::{
     DistributionProfile, PackageManifest, PackagedEngine, PackagedFile, PackagedTool,
 };

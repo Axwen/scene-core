@@ -83,6 +83,11 @@ enum Mode {
     Timeout,
     Violation,
     ToolUnavailable,
+    /// Completes the backend work and requests cancellation afterwards, which
+    /// is the window where a late cancel must still leave no artifact.
+    LateCancel,
+    /// Returns an already-finalized artifact that fails Manifest validation.
+    InvalidManifest,
 }
 
 struct FakeBackend {
@@ -150,6 +155,21 @@ impl MediaBackend for FakeBackend {
                 Err(MediaFailure::Timeout)
             }
             Mode::ToolUnavailable => Err(MediaFailure::ToolUnavailable),
+            Mode::LateCancel => {
+                control.request_cancel();
+                Ok(PreviewOutcome {
+                    media: minimal_media(),
+                    artifacts: vec![fake_artifact()],
+                })
+            }
+            Mode::InvalidManifest => {
+                let mut artifact = fake_artifact();
+                artifact.byte_size = 0;
+                Ok(PreviewOutcome {
+                    media: minimal_media(),
+                    artifacts: vec![artifact],
+                })
+            }
             Mode::Success | Mode::Violation => Ok(PreviewOutcome {
                 media: minimal_media(),
                 artifacts: vec![fake_artifact()],
@@ -173,6 +193,25 @@ impl MediaBackend for FakeBackend {
                 Err(MediaFailure::Timeout)
             }
             Mode::ToolUnavailable => Err(MediaFailure::ToolUnavailable),
+            Mode::LateCancel => {
+                control.request_cancel();
+                Ok(scene_core_engine::run::AudioPcmOutcome {
+                    media: minimal_media(),
+                    artifacts: vec![fake_audio_artifact()],
+                })
+            }
+            Mode::InvalidManifest => {
+                let mut artifact = fake_audio_artifact();
+                artifact
+                    .audio_pcm
+                    .as_mut()
+                    .expect("audio metadata")
+                    .sample_count = 0;
+                Ok(scene_core_engine::run::AudioPcmOutcome {
+                    media: minimal_media(),
+                    artifacts: vec![artifact],
+                })
+            }
             Mode::Success | Mode::Violation => Ok(scene_core_engine::run::AudioPcmOutcome {
                 media: minimal_media(),
                 artifacts: vec![fake_audio_artifact()],
@@ -200,6 +239,11 @@ impl MediaBackend for FakeBackend {
                 Ok(minimal_media())
             }
             Mode::ToolUnavailable => Err(MediaFailure::ToolUnavailable),
+            Mode::LateCancel => {
+                control.request_cancel();
+                Ok(minimal_media())
+            }
+            Mode::InvalidManifest => Ok(minimal_media()),
         }
     }
 }
@@ -222,31 +266,41 @@ fn extract_preview_reports_a_manifest() {
 }
 
 fn session_for(operation: Operation, mode: Mode) -> (Vec<EventEnvelope>, u8) {
+    let (events, exit_code, staging_dir) = session_in(operation, &FakeBackend { mode }, |_| {});
+    let _ = std::fs::remove_dir_all(&staging_dir);
+    (events, exit_code)
+}
+
+/// Runs one session against a prepared staging layout and returns the staging
+/// directory so the caller can inspect what the session left behind.
+fn session_in(
+    operation: Operation,
+    backend: &dyn MediaBackend,
+    prepare: impl FnOnce(&StagingRoot),
+) -> (Vec<EventEnvelope>, u8, std::path::PathBuf) {
     static COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let request = request(operation);
     let engine = engine_identity();
     let control = RunControl::new();
-    let backend = FakeBackend { mode };
     let staging_dir = std::env::temp_dir().join(format!(
-        "scene-core-session-{}-{}-{}",
+        "scene-core-session-{}-{}",
         std::process::id(),
-        COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
-        mode as u8
+        COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     ));
     std::fs::create_dir_all(&staging_dir).expect("staging");
     let staging = StagingRoot::new(&staging_dir).expect("staging root");
+    prepare(&staging);
     let mut events = Vec::new();
     let exit_code = run_session(
         &request,
         &engine,
         &digest(2),
-        &backend,
+        backend,
         &staging,
         &control,
         &mut |event| events.push(event),
     );
-    let _ = std::fs::remove_dir_all(&staging_dir);
-    (events, exit_code)
+    (events, exit_code, staging_dir)
 }
 
 fn session(mode: Mode) -> (Vec<EventEnvelope>, u8) {
@@ -323,6 +377,93 @@ fn cancel_and_timeout_have_their_own_terminals() {
             .code,
         ErrorCode::Timeout
     );
+}
+
+#[test]
+fn a_late_cancel_discards_the_finalized_artifact() {
+    let (events, exit_code, staging_dir) = session_in(
+        Operation::ExtractPreview,
+        &FakeBackend {
+            mode: Mode::LateCancel,
+        },
+        |staging| {
+            let reference = RelativeRef::new("output/preview/opening.jpg").expect("ref");
+            let path = staging.output(&reference).expect("output path");
+            std::fs::create_dir_all(path.parent().expect("parent")).expect("output dir");
+            std::fs::write(&path, b"artifact").expect("write artifact");
+        },
+    );
+    assert_eq!(exit_code, 130);
+    assert_eq!(
+        events.last().expect("terminal").event_type,
+        EventType::Cancelled
+    );
+    assert!(
+        !staging_dir.join("output/preview/opening.jpg").exists(),
+        "a cancelled run must not leave a published artifact"
+    );
+    let _ = std::fs::remove_dir_all(&staging_dir);
+}
+
+#[test]
+fn manifest_validation_failures_discard_finalized_artifacts() {
+    for (operation, relative) in [
+        (Operation::ExtractPreview, "output/preview/opening.jpg"),
+        (Operation::ExtractAudioPcm, "output/audio/track.wav"),
+    ] {
+        let (events, exit_code, staging_dir) = session_in(
+            operation,
+            &FakeBackend {
+                mode: Mode::InvalidManifest,
+            },
+            |staging| {
+                let reference = RelativeRef::new(relative).expect("ref");
+                let path = staging.output(&reference).expect("output path");
+                std::fs::create_dir_all(path.parent().expect("parent")).expect("output dir");
+                std::fs::write(&path, b"artifact").expect("write artifact");
+            },
+        );
+        assert_eq!(
+            exit_code,
+            ErrorCode::EngineInternal.exit_code(),
+            "{operation:?}"
+        );
+        let terminal = events.last().expect("terminal");
+        assert_eq!(terminal.event_type, EventType::Failed, "{operation:?}");
+        assert_eq!(
+            terminal.error.as_ref().expect("error").code,
+            ErrorCode::EngineInternal,
+            "{operation:?}"
+        );
+        assert!(
+            !staging_dir.join(relative).exists(),
+            "{operation:?} must discard finalized artifacts when Manifest validation fails"
+        );
+        let _ = std::fs::remove_dir_all(&staging_dir);
+    }
+}
+
+#[test]
+fn a_failed_late_cleanup_is_reported_as_internal() {
+    let (events, exit_code, staging_dir) = session_in(
+        Operation::ExtractPreview,
+        &FakeBackend {
+            mode: Mode::LateCancel,
+        },
+        |staging| {
+            let reference = RelativeRef::new("output/preview/opening.jpg").expect("ref");
+            let path = staging.output(&reference).expect("output path");
+            std::fs::create_dir_all(&path).expect("directory blocks file cleanup");
+        },
+    );
+    assert_eq!(exit_code, ErrorCode::EngineInternal.exit_code());
+    let terminal = events.last().expect("terminal");
+    assert_eq!(terminal.event_type, EventType::Failed);
+    assert_eq!(
+        terminal.error.as_ref().expect("error").code,
+        ErrorCode::EngineInternal
+    );
+    let _ = std::fs::remove_dir_all(&staging_dir);
 }
 
 #[test]

@@ -1,7 +1,11 @@
-//! `scene-core` sidecar CLI: `version --json` and `doctor --json`.
+//! `scene-core` sidecar CLI: `version --json`, `doctor --json` and the
+//! stdin/stdout `run` session.
 //!
-//! The engine has no media runtime yet; these commands freeze the identity and
-//! bundle-integrity contracts described by Protocol 0.1.
+//! Protocol 0.1 `probe`, `extract_preview` and `extract_audio_pcm` are
+//! implemented over the locked FFmpeg/FFprobe toolchain. Wire contracts live
+//! in `scene-core-protocol`, process/staging/media work in `scene-core-media`,
+//! and this crate owns request validation, event sequencing and the doctor
+//! bundle checks.
 
 pub mod cli;
 pub mod doctor;

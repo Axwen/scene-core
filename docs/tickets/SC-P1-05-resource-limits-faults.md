@@ -36,7 +36,18 @@
 - 修复：缓冲改为堆分配；新增 256 KiB 栈线程的回归测试；该进程测试重新在 Windows 启用。
 - 顺带修复：测试并发共享 staging 目录名导致的竞态（改用原子计数唯一命名），连续三次全量运行稳定。
 
+### 产物 finalize 与迟到取消（2026-09-21 复核修复）
+
+- 预览与音频产物先全部写入临时文件、全部校验通过后统一 finalize（预览批量 rename，音频把 rename 放到哈希与连续性校验之后）；任何失败出口由临时文件守卫清理，rename 批失败回滚已发布路径。
+- session 在终态为非成功（迟到取消/超时/协议违规）时删除后端已发布的产物，补上“失败/取消/超时无产物”的最后一个窗口。
+- 确定性测试：`a_late_cancel_discards_the_finalized_artifact`（假后端 + 预置产物）、`finalize_publishes_the_whole_set_or_rolls_back`、`a_temporary_is_removed_unless_kept`。
+
 未完成：子进程树回收的深度检查（当前工具为单进程）、磁盘配额/大文件预算（SC-P1-06 性能基线）。
+
+### 子进程树回收评估（2026-09-21，仍暂缓）
+
+- 现状：`process::run` 只 kill 直接子进程；若后代进程继承 stdout/stderr 管道，读取线程会滞留到后代退出。`collect_output` 在子进程退出后 2 s 超时返回错误，不阻塞调用方，且 Core 为一次性进程，风险有界。
+- 候选 `command-group` 5.0.1（MSRV 1.68、Apache-2.0 OR MIT）：Unix 走 `nix`、Windows 走 `winapi` + `CREATE_SUSPENDED`，会新增两个平台依赖并改变子进程启动路径。当前 FFmpeg 为单进程，收益不足，暂不引入；出现多进程工具（如包装脚本）时再评估并补充跨平台回收测试。
 
 ## Host 并发与配额边界（P2，不在本 ticket 实现）
 

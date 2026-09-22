@@ -35,8 +35,11 @@ pub enum ArtifactRole {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct AudioPcmInfo {
+    #[schemars(extend("minimum" = 1))]
     pub sample_rate: u32,
+    #[schemars(extend("minimum" = 1))]
     pub channels: u32,
+    #[schemars(extend("minimum" = 1))]
     pub sample_count: u64,
 }
 

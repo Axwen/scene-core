@@ -76,9 +76,11 @@ pub struct AudioPcmOptions {
     pub end_ms: Option<u64>,
     /// Output sample rate; omitted keeps the source rate.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(extend("minimum" = 8_000, "maximum" = 192_000))]
     pub sample_rate: Option<u32>,
     /// Output channel count (1 or 2); omitted keeps the source layout.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(extend("minimum" = 1, "maximum" = 2))]
     pub channels: Option<u16>,
 }
 
@@ -89,7 +91,8 @@ pub const MAX_AUDIO_CHANNELS: u16 = 2;
 
 impl AudioPcmOptions {
     pub fn validate(&self) -> Result<(), ValidationError> {
-        if let (Some(start), Some(end)) = (self.start_ms, self.end_ms) {
+        let start = self.start_ms.unwrap_or(0);
+        if let Some(end) = self.end_ms {
             if end <= start {
                 return Err(ValidationError::new(
                     "options.endMs",
@@ -158,11 +161,14 @@ impl<'de> Deserialize<'de> for OperationOptions {
                     "sampleRate",
                     "channels",
                 ];
-                let mut audio_stream_index: Option<u32> = None;
-                let mut start_ms: Option<u64> = None;
-                let mut end_ms: Option<u64> = None;
-                let mut sample_rate: Option<u32> = None;
-                let mut channels: Option<u16> = None;
+                // Optional fields accept an explicit JSON null as "absent",
+                // matching the schemas; the outer Option records presence so
+                // duplicate keys are still rejected.
+                let mut audio_stream_index: Option<Option<u32>> = None;
+                let mut start_ms: Option<Option<u64>> = None;
+                let mut end_ms: Option<Option<u64>> = None;
+                let mut sample_rate: Option<Option<u32>> = None;
+                let mut channels: Option<Option<u16>> = None;
                 let mut present = false;
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
@@ -218,11 +224,11 @@ impl<'de> Deserialize<'de> for OperationOptions {
                     return Ok(OperationOptions::Empty(EmptyOptions {}));
                 }
                 Ok(OperationOptions::ExtractAudioPcm(AudioPcmOptions {
-                    audio_stream_index,
-                    start_ms,
-                    end_ms,
-                    sample_rate,
-                    channels,
+                    audio_stream_index: audio_stream_index.flatten(),
+                    start_ms: start_ms.flatten(),
+                    end_ms: end_ms.flatten(),
+                    sample_rate: sample_rate.flatten(),
+                    channels: channels.flatten(),
                 }))
             }
         }
@@ -332,6 +338,19 @@ mod tests {
                 .validate_for(Operation::ExtractAudioPcm)
                 .is_err()
         );
+        let zero_end = serde_json::from_str::<OperationOptions>(r#"{"endMs":0}"#)
+            .expect("explicit zero end parses");
+        assert!(
+            zero_end.validate_for(Operation::ExtractAudioPcm).is_err(),
+            "endMs=0 must not bypass the default startMs=0 window rule"
+        );
+        let end_after_default_start =
+            serde_json::from_str::<OperationOptions>(r#"{"endMs":1}"#).expect("end parses");
+        assert!(
+            end_after_default_start
+                .validate_for(Operation::ExtractAudioPcm)
+                .is_ok()
+        );
         let invalid_rate = OperationOptions::ExtractAudioPcm(AudioPcmOptions {
             sample_rate: Some(4_000),
             ..AudioPcmOptions::default()
@@ -364,6 +383,24 @@ mod tests {
             )
             .is_err(),
             "duplicate key"
+        );
+        let explicit_nulls = serde_json::from_str::<OperationOptions>(
+            r#"{"audioStreamIndex":null,"startMs":null,"endMs":null,"sampleRate":null,"channels":null}"#,
+        )
+        .expect("explicit nulls parse as absent");
+        assert_eq!(
+            explicit_nulls,
+            OperationOptions::ExtractAudioPcm(AudioPcmOptions::default()),
+            "null must mean the same as an omitted optional field"
+        );
+        assert!(
+            explicit_nulls
+                .validate_for(Operation::ExtractAudioPcm)
+                .is_ok()
+        );
+        assert!(
+            serde_json::from_str::<OperationOptions>(r#"{"endMs":null,"endMs":1}"#).is_err(),
+            "a null value must not satisfy the duplicate check"
         );
         assert!(serde_json::from_str::<OperationOptions>("[]").is_err());
 
