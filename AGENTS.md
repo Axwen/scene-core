@@ -15,7 +15,7 @@ cargo test --workspace --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
 ```
 
-依赖变更后先更新 `Cargo.lock` 再提交。`schemas/0.1/` 由 Rust DTO 生成（schemars），`scripts/check-schema-drift.sh` 对比提交的 Schema 与生成结果；重生成命令：`UPDATE_SCHEMAS=1 cargo test -p scene-core-protocol --test schema_contract`。协议设计变更可先检查文档链接和示例：
+依赖变更后先更新 `Cargo.lock` 再提交，并额外运行 `cargo deny check`（advisories/licenses/sources，配置见 `deny.toml`，CI 强制）。`schemas/0.1/` 由 Rust DTO 生成（schemars），`scripts/check-schema-drift.sh` 对比提交的 Schema 与生成结果；重生成命令：`UPDATE_SCHEMAS=1 cargo test -p scene-core-protocol --test schema_contract`。协议设计变更可先检查文档链接和示例：
 
 ```bash
 grep -R "^#" docs/architecture/repositories

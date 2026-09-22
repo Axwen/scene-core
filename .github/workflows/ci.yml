@@ -34,6 +34,9 @@ jobs:
       - name: Run Clippy
         run: cargo +1.85.1 clippy --workspace --all-targets --locked -- -D warnings
 
+      - name: Check dependency advisories, licenses and sources
+        uses: EmbarkStudios/cargo-deny-action@v2
+
       - name: Check schema drift preflight
         run: bash scripts/check-schema-drift.sh
 

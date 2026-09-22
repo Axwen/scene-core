@@ -1,0 +1,32 @@
+# Dependency policy: advisories, licenses and sources.
+# CI runs `cargo deny check`; locally: cargo deny check
+
+[advisories]
+# RustSec advisories; add ignores with a reason only when unavoidable.
+ignore = []
+
+[licenses]
+# Keep this list to the licenses actually present; extend it deliberately.
+allow = [
+    "Apache-2.0",
+    "MIT",
+    "Unicode-3.0",
+    "Unlicense",
+]
+confidence-threshold = 0.9
+
+[licenses.private]
+# Workspace crates are unpublished and inherit the repository MIT license.
+ignore = true
+
+[bans]
+# The workspace has no duplicate versions; keep it that way.
+multiple-versions = "deny"
+wildcards = "deny"
+# Workspace path dependencies intentionally carry no version requirement.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
